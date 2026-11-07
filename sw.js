@@ -1,13 +1,15 @@
 // NFSU2 Save Editor — service worker
 // Bump CACHE_NAME when you want to force-clear old caches on all clients.
-const CACHE_NAME = 'nfsu2-save-editor-v3';
+const CACHE_NAME = 'nfsu2-save-editor-v4';
 
 const PRECACHE = [
   '/',
   '/index.html',
   '/css/style.css',
   '/css/landing.css',
+  '/css/visual-editor.css',
   '/js/app.bundle.min.js',
+  '/js/visual-editor.js',
   '/assets/DEMO',
   '/assets/JANE',
   '/assets/favicon.svg',
