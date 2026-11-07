@@ -140,3 +140,51 @@ test('unlocking rims sets one owned bit per aftermarket rim and nothing else', (
   V.unlockAllRims(cat, save, base);
   assert.deepEqual(changed(untouched, save), diff, 'idempotent');
 });
+
+test('the game\'s empty value is only allowed where the game itself stores 0', () => {
+  const cat = V.parseGameData(buildBun(PARTS));
+  for (const slot of [31, 64, 67, 68, 73, 76, 105, 152]) assert.ok(V.isNoneSlot(slot), `slot ${slot}`);
+  for (const slot of [1, 6, 12, 29, 63, 77, 153, 154, 161, 163, 164]) assert.ok(!V.isNoneSlot(slot), `slot ${slot}`);
+  assert.throws(() => cat.edit(jane(), GARAGE_BASE, 12, 0), /no empty value/);
+  const save = jane();
+  cat.edit(save, GARAGE_BASE, 73, 0);
+  assert.equal(V.readVisual(save, GARAGE_BASE)[73], 0);
+});
+
+test('stock values follow what the game gives a new car', () => {
+  const cat = V.parseGameData(buildBun(PARTS));
+  assert.equal(cat.stockValue(CAR, 1), V.gameHash('240SX_KIT00_FRONT_BUMPER'));
+  assert.equal(cat.stockValue(CAR, 12), V.gameHash('240SX_STOCK_SPOILER'));
+  assert.equal(cat.stockValue(CAR, 29), V.gameHash('WHEEL_STYLE01'));
+  assert.equal(cat.stockValue(CAR, 63), V.gameHash('GLOSS_L2_COLOR17'), 'factory paint from the car record');
+  assert.equal(cat.stockValue(CAR, 64), 0);
+  assert.equal(cat.stockValue(CAR, 73), 0);
+  assert.deepEqual([77, 78, 79, 80, 92].map((s) => cat.stockValue(CAR, s)),
+    ['VINYL_L1_COLOR09', 'VINYL_L1_COLOR02', 'VINYL_L2_COLOR11', 'VINYL_L1_COLOR01', 'VINYL_L1_COLOR01'].map(V.gameHash));
+  assert.equal(cat.stockValue(CAR, 6), null, 'no level-0 widebody in this catalogue');
+});
+
+test('reset to stock restores parts, paint and aero flags inside the record only', () => {
+  const cat = V.parseGameData(buildBun(PARTS));
+  const before = jane(), save = before.slice();
+  const skipped = cat.resetToStock(save, GARAGE_BASE);
+  const refs = V.readVisual(save, GARAGE_BASE);
+  assert.equal(refs[1], V.gameHash('240SX_KIT00_FRONT_BUMPER'));
+  assert.equal(refs[12], V.gameHash('240SX_STOCK_SPOILER'));
+  assert.equal(refs[29], V.gameHash('WHEEL_STYLE01'));
+  assert.equal(refs[30], V.gameHash('WHEEL_STYLE01'));
+  assert.equal(refs[63], V.gameHash('GLOSS_L2_COLOR17'));
+  assert.deepEqual([64, 65, 66, 67].map((s) => refs[s]), [0, 0, 0, 0]);
+  // The synthetic catalogue has no level-0 widebody, rear bumper, hood or skirt.
+  assert.deepEqual(skipped.sort((a, b) => a - b), [2, 6, 9, 11]);
+  const flags = save.subarray(GARAGE_BASE + V.PERF_REL + 56, GARAGE_BASE + V.PERF_REL + 68);
+  // Stock front bumper and spoiler drop their flags; the kept rear bumper (L2) and skirts (L3) keep theirs.
+  assert.deepEqual(Array.from(flags).flatMap((v, i) => (v ? [56 + i] : [])), [61, 63]);
+  const end = GARAGE_BASE + V.PERF_REL + 68;
+  assert.ok(changed(before, save).every((i) => i >= GARAGE_BASE && i < end));
+  // Group reset touches only its own slots.
+  const partial = before.slice();
+  cat.resetToStock(partial, GARAGE_BASE, [29]);
+  assert.deepEqual(V.readVisual(partial, GARAGE_BASE).map((v, i) => (i === 29 || i === 30 ? 0 : v)),
+    V.readVisual(before, GARAGE_BASE).map((v, i) => (i === 29 || i === 30 ? 0 : v)));
+});

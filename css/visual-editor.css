@@ -211,3 +211,25 @@
   gap: 10px;
   font: 12px var(--font-mono);
 }
+
+.ve-group h3 {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.ve-group h3 .btn {
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.ve-swatch-none {
+  background:
+    linear-gradient(to top right, transparent calc(50% - 1px), var(--status-locked-text) 50%, transparent calc(50% + 1px)),
+    var(--bg-input);
+}
+
+.ve-foot {
+  flex-wrap: wrap;
+}

@@ -184,6 +184,19 @@
     return cat ? [{ id, name, label: label(name), tab: cat[0], category: cat[1] }] : [];
   });
 
+  /**
+   * Slots where the game itself stores 0 for "nothing": spinners, vinyl layers, the secondary paints
+   * (hoses, spoiler, calipers, muffler, audio, rims, spinners, roof, mirrors) and decal textures. A car
+   * the game sets up from scratch has 0 in all of them. Every other slot uses a named part for "stock"
+   * or "none" (STOCK, NO WIDEBODY, NO ROOF SCOOP, CARBON FIBRE NONE, NO NEON, NO HYDRAULICS...).
+   */
+  function isNoneSlot(slot) {
+    return slot === 31 || (slot >= 64 && slot <= 76) || (slot >= 105 && slot <= 152);
+  }
+
+  /** The vinyl colours a new car gets for each of its four vinyl layers. */
+  const DEFAULT_VINYL_COLOURS = ['VINYL_L1_COLOR09', 'VINYL_L1_COLOR02', 'VINYL_L2_COLOR11', 'VINYL_L1_COLOR01'].map(gameHash);
+
   function isColorSlot(slot) {
     return slot === 63 || (slot >= 68 && slot <= 92) || (slot >= 164 && slot <= 166);
   }
@@ -243,6 +256,7 @@
   const CHUNK_CARS = 0x34600;
   const CAR_STRIDE = 0x890;
   const CAR_HASH_REL = 0xd0;
+  const CAR_STOCK_PAINT_REL = 0x84c;
 
   function parseCars(bytes, chunks) {
     const c = chunks.get(CHUNK_CARS);
@@ -254,7 +268,8 @@
     for (let base = start; base + CAR_STRIDE <= end; base += CAR_STRIDE) {
       let name = '';
       for (let k = 0; k < 0x20 && bytes[base + k]; k++) name += String.fromCharCode(bytes[base + k]);
-      cars.push({ name, hash: dv.getUint32(base + CAR_HASH_REL, true) });
+      // +0x84C: the car's factory paint (+0x850 an alternative), what a new car is given.
+      cars.push({ name, hash: dv.getUint32(base + CAR_HASH_REL, true), stockPaint: dv.getUint32(base + CAR_STOCK_PAINT_REL, true) });
     }
     if (!cars.length) throw new Error('This file is not GLOBAL\\GLOBALB.BUN from NFSU2 (car table is empty).');
     return cars;
@@ -354,6 +369,7 @@
       this.overrides = overrides;
       this.cars = cars;
       this.carNames = new Map(cars.map((c) => [c.hash, c.name]));
+      this.stockPaints = new Map(cars.map((c) => [c.hash, c.stockPaint]));
       this.optionCache = new Map();
     }
 
@@ -383,12 +399,52 @@
 
     selectableOptions(car, slot) {
       const categories = paintCategories(slot);
-      return this.options(car, slot).filter((part) => !categories ||
-        categories.includes((part.attributes.get(0xebb03e66) || [0])[0]));
+      // DUMMY is the catalogue's internal placeholder part, not something the game offers.
+      return this.options(car, slot).filter((part) => part.name !== 'DUMMY' && (!categories ||
+        categories.includes((part.attributes.get(0xebb03e66) || [0])[0])));
     }
 
     part(car, slot, hash) {
       return this.options(car, slot).find((p) => p.hash === hash);
+    }
+
+    /**
+     * What a car fresh from the game has in this slot: 0 where the game stores nothing, the car's
+     * factory paint for the body, the default vinyl colours, otherwise the first level-0 part (STOCK,
+     * NO WIDEBODY, NO NEON, ...). null when the stock value is not known for this car.
+     */
+    stockValue(car, slot) {
+      if (slot === 63) {
+        const paint = this.stockPaints.get(car);
+        return this.selectableOptions(car, 63).some((p) => p.hash === paint) ? paint : null;
+      }
+      if (slot >= 77 && slot <= 92) return DEFAULT_VINYL_COLOURS[(slot - 77) % 4];
+      if (isNoneSlot(slot)) return 0;
+      const stock = this.selectableOptions(car, slot).find((p) => p.level === 0);
+      return stock ? stock.hash : null;
+    }
+
+    /**
+     * Resets the given editable slots (default: all) to stock, in place. The widebody kit and carbon
+     * go first so bumpers, doors and vinyl exclusions follow the game's rules. Returns the slots that
+     * could not be reset (no known stock value for this car).
+     */
+    resetToStock(bytes, base, slots = VISUAL_SLOTS.map((s) => s.id)) {
+      const car = readCarHash(bytes, base), skipped = [];
+      const order = [...slots].sort((a, b) => (a === 6 ? -1 : b === 6 ? 1 : a === 93 ? -1 : b === 93 ? 1 : a - b));
+      for (const slot of order) {
+        // No such part on this car (e.g. separate mirrors); "none" slots can always be cleared.
+        if (!isNoneSlot(slot) && !this.options(car, slot).length) continue;
+        const value = this.stockValue(car, slot);
+        if (value === null) { skipped.push(slot); continue; }
+        if (readVisual(bytes, base)[slot] === value) continue;
+        try {
+          this.edit(bytes, base, slot, value);
+        } catch {
+          skipped.push(slot);
+        }
+      }
+      return skipped;
     }
 
     /** Slots hidden by installed parts (widebody hides bumpers/skirts, some kits hide named slots). */
@@ -414,6 +470,7 @@
       const car = readCarHash(bytes, base);
       const refs = readVisual(bytes, base);
       const part = this.part(car, visual, hash);
+      if (hash === 0 && !isNoneSlot(visual)) throw new RangeError('The game has no empty value here; choose the stock part instead.');
       if (hash !== 0 && !part) throw new RangeError('This part is not compatible with this car and slot.');
       if (hash !== 0 && !this.selectableOptions(car, visual).some((p) => p.hash === hash)) {
         throw new RangeError('This colour belongs to a different paint category.');
@@ -665,13 +722,15 @@
     const sections = [...groups].map(([cat, slots]) => {
       let rows = slots.map((slot) => renderSlotRow(slot, car, refs)).filter(Boolean).join('');
       if (cat === 'Wheels' && state.garage) rows += renderOwnedRims(car);
-      return rows ? `<section class="ve-group"><h3>${escapeHtml(cat)}</h3>${rows}</section>` : '';
+      return rows ? `<section class="ve-group"><h3><span>${escapeHtml(cat)}</span>
+        <button type="button" class="btn btn-xs btn-ghost" data-ve-reset="${escapeHtml(cat)}">Reset to stock</button></h3>${rows}</section>` : '';
     }).join('');
     const dirty = draftDirty();
     dialog.innerHTML = head + `
       <div class="garage-mode-tabs ve-tabs" role="tablist">${tabs}</div>
       <div class="ve-body">${sections || '<p class="ve-empty">No editable parts for this car in this category.</p>'}</div>
       <div class="ve-foot">
+        <button type="button" class="btn btn-ghost btn-sm" data-ve="reset-all" title="Every part, paint, vinyl, decal and specialty back to what the game gives a new car">Reset whole car to stock</button>
         <span class="ve-note">${dirty ? 'Unapplied changes' : 'No changes'}</span>
         <button type="button" class="btn btn-ghost btn-sm" data-ve="discard" ${dirty ? '' : 'disabled'}>Discard</button>
         <button type="button" class="btn btn-primary btn-sm" data-ve="apply" ${dirty ? '' : 'disabled'}>Apply changes</button>
@@ -682,19 +741,30 @@
     const options = catalog.selectableOptions(car, slot.id);
     const current = refs[slot.id];
     if (!options.length && current === 0) return '';
+    const stock = catalog.stockValue(car, slot.id);
+    const stockTag = slot.id >= 77 && slot.id <= 92 ? 'default' : 'stock';
     const hidden = catalog.hidden(refs, car, slot.id);
     const installed = catalog.part(car, slot.id, current);
     const known = options.some((p) => p.hash === current);
     if (isColorSlot(slot.id)) {
       const swatch = installed && installed.color ? installed.color : 'transparent';
-      const name = current === 0 ? 'None' : installed ? installed.name : `Unknown ${hex8(current)}`;
+      const name = (current === 0 ? 'None' : installed ? installed.name : `Unknown ${hex8(current)}`) +
+        (current === stock ? ` (${stockTag})` : '');
       const open = state.openPalette === slot.id;
-      const palettes = open ? colorPalettes(options).map((pal) => `
+      const stockPart = stock ? options.find((p) => p.hash === stock) : null;
+      const quick = !open ? '' : `
+        <div class="ve-palette"><span class="ve-palette-name">Quick</span><div class="ve-swatches">
+          ${isNoneSlot(slot.id) ? `<button type="button" class="ve-swatch ve-swatch-none ${current === 0 ? 'selected' : ''}"
+            title="None (game default)" aria-label="None" data-ve-pick="${slot.id}" data-hash="0"></button>` : ''}
+          ${stockPart ? `<button type="button" class="ve-swatch ${current === stock ? 'selected' : ''}" style="background:${stockPart.color || 'transparent'}"
+            title="${escapeHtml(stockPart.name)} (${stockTag})" aria-label="${stockTag}" data-ve-pick="${slot.id}" data-hash="${stock}"></button>` : ''}
+        </div></div>`;
+      const palettes = !open ? '' : quick + colorPalettes(options).map((pal) => `
         <div class="ve-palette"><span class="ve-palette-name">${escapeHtml(pal.name)}</span><div class="ve-swatches">
           ${pal.parts.map((p) => `<button type="button" class="ve-swatch ${p.hash === current ? 'selected' : ''}"
-            style="background:${p.color || 'transparent'}" title="${escapeHtml(p.name)}" aria-label="${escapeHtml(p.name)}"
+            style="background:${p.color || 'transparent'}" title="${escapeHtml(p.name)}${p.hash === stock ? ` (${stockTag})` : ''}" aria-label="${escapeHtml(p.name)}"
             data-ve-pick="${slot.id}" data-hash="${p.hash}"></button>`).join('')}
-        </div></div>`).join('') : '';
+        </div></div>`).join('');
       return `
         <div class="ve-row ${hidden ? 'is-hidden' : ''}">
           <span class="ve-label">${escapeHtml(slot.label)}</span>
@@ -705,11 +775,18 @@
         </div>`;
     }
     const opts = [];
-    if (current === 0 || !known) {
-      opts.push(`<option value="${current}" selected>${current === 0 ? '— None —' : escapeHtml(installed ? installed.name : 'Unknown ' + hex8(current))}</option>`);
+    if (isNoneSlot(slot.id)) {
+      opts.push(`<option value="0" ${current === 0 ? 'selected' : ''}>— None —${stock === 0 ? ` (${stockTag})` : ''}</option>`);
+    } else if (current === 0) {
+      opts.push('<option value="0" selected disabled>— Empty (not a game value) —</option>');
     }
-    for (const p of options) {
-      opts.push(`<option value="${p.hash}" ${p.hash === current ? 'selected' : ''}>${escapeHtml(partLabel(p, car))}</option>`);
+    if (current !== 0 && !known) {
+      opts.push(`<option value="${current}" selected>${escapeHtml(installed ? installed.name : 'Unknown ' + hex8(current))}</option>`);
+    }
+    // The stock part first, then the rest in catalogue order.
+    const ordered = [...options.filter((p) => p.hash === stock), ...options.filter((p) => p.hash !== stock)];
+    for (const p of ordered) {
+      opts.push(`<option value="${p.hash}" ${p.hash === current ? 'selected' : ''}>${escapeHtml(partLabel(p, car))}${p.hash === stock ? ` (${stockTag})` : ''}</option>`);
     }
     return `
       <label class="ve-row ${hidden ? 'is-hidden' : ''}">
@@ -741,6 +818,15 @@
     renderDialog();
   }
 
+  function resetDraft(slots, label) {
+    const skipped = catalog.resetToStock(state.draft, state.base, slots);
+    if (skipped.length) {
+      const names = skipped.map((id) => VISUAL_SLOTS.find((s) => s.id === id)?.label || id).join(', ');
+      toast(`${label}: reset to stock, except ${names} (no stock value known for this car)`);
+    }
+    renderDialog();
+  }
+
   function onDialogChange(e) {
     const select = e.target.closest('[data-ve-slot]');
     if (select && state) setDraft(Number(select.dataset.veSlot), Number(select.value) >>> 0);
@@ -749,7 +835,7 @@
   async function onDialogClick(e) {
     if (e.target === dialog) return dialog.close();
     if (!state) return;
-    const el = e.target.closest('[data-ve],[data-ve-tab],[data-ve-palette],[data-ve-pick]');
+    const el = e.target.closest('[data-ve],[data-ve-tab],[data-ve-palette],[data-ve-pick],[data-ve-reset]');
     if (!el) return;
     if (el.dataset.veTab) {
       state.tab = el.dataset.veTab;
@@ -762,12 +848,18 @@
       return renderDialog();
     }
     if (el.dataset.vePick) return setDraft(Number(el.dataset.vePick), Number(el.dataset.hash) >>> 0);
+    if (el.dataset.veReset) {
+      const slots = VISUAL_SLOTS.filter((s) => s.tab === state.tab && s.category === el.dataset.veReset).map((s) => s.id);
+      return resetDraft(slots, el.dataset.veReset);
+    }
     switch (el.dataset.ve) {
       case 'close':
         return dialog.close();
       case 'load-bun':
         if (await pickGameData()) renderDialog();
         return;
+      case 'reset-all':
+        return resetDraft(undefined, 'Whole car');
       case 'unlock-rims':
         unlockAllRims(catalog, state.draft, state.base);
         return renderDialog();
@@ -884,7 +976,7 @@
   }
 
   root.NFSU2Visual = {
-    gameHash, parseGameData, decompressJdlz, loadGameData, pickGameData, readVisual, rimBits, ownedRimCount, unlockAllRims,
+    gameHash, isNoneSlot, DEFAULT_VINYL_COLOURS, parseGameData, decompressJdlz, loadGameData, pickGameData, readVisual, rimBits, ownedRimCount, unlockAllRims,
     OWNED_RIMS_REL, readCarHash, listCustomCars, customCarBase, colorPalettes,
     VisualCatalog, VISUAL_SLOTS, VISUAL_COUNT, VISUAL_REL, PERF_REL,
   };

@@ -9,7 +9,7 @@ export const CAR = V.gameHash('240SX');
 const PAINT_GLOSS = 0x2daab07, PAINT_RIM = 0xda27;
 
 /** Minimal GLOBALB.BUN: car table plus the visual database chunks the reader needs. */
-export function buildBun(parts, cars = ['240SX', '350Z']) {
+export function buildBun(parts, cars = ['240SX', '350Z'], stockPaints = { '240SX': 'GLOSS_L2_COLOR17' }) {
   const chunk = (id, payload) => {
     const out = new Uint8Array(8 + payload.length), dv = new DataView(out.buffer);
     dv.setUint32(0, id >>> 0, true);
@@ -27,6 +27,7 @@ export function buildBun(parts, cars = ['240SX', '350Z']) {
   cars.forEach((name, i) => {
     for (let k = 0; k < name.length; k++) carTable[i * 0x890 + k] = name.charCodeAt(k);
     new DataView(carTable.buffer).setUint32(i * 0x890 + 0xd0, V.gameHash(name), true);
+    if (stockPaints[name]) new DataView(carTable.buffer).setUint32(i * 0x890 + 0x84c, V.gameHash(stockPaints[name]), true);
   });
   const groups = [...new Set(parts.map((p) => p.group))];
   let strings = [], stringLen = 0;
@@ -86,6 +87,7 @@ export const PARTS = [
   { name: '240SX_KIT09_FRONT_BUMPER', type: 1, level: 2, group: CAR },
   { name: '240SX_KIT10_REAR_BUMPER', type: 2, level: 2, group: CAR },
   { name: '240SX_KIT13_SKIRT', type: 11, level: 3, group: CAR },
+  { name: '240SX_STOCK_SPOILER', type: 12, level: 0, group: CAR },
   { name: '240SX_STYLE01_SPOILER', type: 12, level: 1, group: CAR },
   { name: '240SX_STYLE02_SPOILER', type: 12, level: 3, group: CAR },
   { name: '240SX_KITW01_BODY', type: 6, level: 1, variant: 1, group: CAR },
