@@ -26,6 +26,11 @@ Browser-based utility for editing **Need for Speed: Underground 2** career save 
   - Completes the career from the game's own goals (all 224 events, 30 photo goals, every stage), so the game itself shows 100%; every shop, shop part and Car Lot car is unlocked and every garage slot (1–10) is open.
   - Every car in your garage owns every part (rims, spoilers, body kits, vinyls, decals, specialties, performance parts) and all 9 Outrun Uniques, so nothing is padlocked when you customise in the game's garage.
   - Keeps your profile name, money and cars. Works without any game files.
+- **Visual Customisation (per car, optional):**
+  - Change body kits, spoilers, hoods, rims, spinners, paint (body, rims, calipers, spoiler…), vinyls, decals, window tint, neons, hydraulics and custom gauges for any garage or custom car, with *Reset to stock* per section or for the whole car, and the game's own *None* where it has one.
+  - Part lists come from your own game's `GLOBAL\GlobalB.lzc` (PC install/disc) or an unpacked `GLOBALB.BUN`, read locally and never uploaded, so only parts that fit the selected car are offered.
+- **Quick Race Custom Cars:**
+  - Add, change and delete the cars of *Quick Race → Customize* (up to 20, stored separately from the career garage): copy one of your garage cars or pick any built-in car, set the performance level, Outrun Uniques and Dyno curves, and edit visuals, like a garage car. New cars get the game's own `TUNED_CAR_<n>` IDs.
 - **JSON Car Patches & Checksums:**
   - Export and import individual car builds as `.json` files.
   - Automatic header CRC-32 recalculation on save download.
