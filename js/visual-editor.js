@@ -556,9 +556,15 @@
   }
 
   /** Parses GLOBALB.BUN bytes and makes them the active part catalogue. */
-  function loadGameData(bytes, name) {
+  function loadGameData(input, name) {
+    let bytes = input instanceof Uint8Array ? input : new Uint8Array(input);
+    if (isJdlz(bytes)) bytes = decompressJdlz(bytes);
     catalog = parseGameData(bytes);
     catalogFile = name;
+    // js/career.js reads the career tables from the same file.
+    if (typeof root.dispatchEvent === 'function' && typeof CustomEvent === 'function') {
+      root.dispatchEvent(new CustomEvent('nfsu2:gamedata', { detail: { bytes, name } }));
+    }
     toast(`Loaded ${name}: ${catalog.parts.length.toLocaleString()} parts for ${catalog.cars.length} cars`);
     renderCustomCars();
     return catalog;
@@ -878,7 +884,7 @@
   }
 
   root.NFSU2Visual = {
-    gameHash, parseGameData, decompressJdlz, loadGameData, readVisual, rimBits, ownedRimCount, unlockAllRims,
+    gameHash, parseGameData, decompressJdlz, loadGameData, pickGameData, readVisual, rimBits, ownedRimCount, unlockAllRims,
     OWNED_RIMS_REL, readCarHash, listCustomCars, customCarBase, colorPalettes,
     VisualCatalog, VISUAL_SLOTS, VISUAL_COUNT, VISUAL_REL, PERF_REL,
   };

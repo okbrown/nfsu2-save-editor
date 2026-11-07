@@ -25,7 +25,7 @@ Browser-based utility for editing **Need for Speed: Underground 2** career save 
 - **Career Unlocks & Templates:**
   - **Starter 0% + Unlocked:** Load a clean 0% races save with $999,999, all 5 slots, Car Lot, shops, Stage 3, and 9 Uniques ready to go.
   - **Safe Career Add-ons:** Unlock per-car part tables, Car Lot catalog tables, and hidden shop map icons without skipping active career races.
-  - **100% Sandbox Mode:** Apply a 100% completed Stage 5 world while keeping your profile name, cash, and current garage cars.
+  - **Complete Career (100%):** wins every career event and photo goal defined in your game data, completes all stages, discovers every shop and opens all 5 garage slots, so the game itself reports 100% with no shop, part or Car Lot gate left. Keeps your profile name, cash and garage cars; nothing is copied from another save. Needs `GLOBAL\GlobalB.lzc`.
 - **Visual Customisation (Rims, Spoilers, Paint & more):**
   - Change body kits, spoilers, hoods, rims, spinners, paint (body, rims, calipers, spoiler…), vinyls, decals, window tint, neons, hydraulics and custom gauges for any garage car (Slots 1–10).
   - Part lists come from your own game's `GLOBAL\GlobalB.lzc` (PC install/disc) or an unpacked `GLOBALB.BUN`, read locally and never uploaded, so only parts that fit the selected car are offered.
@@ -57,14 +57,14 @@ Press `Win + R` and paste:
 2. **From Archive / Repository:**
    - Download the latest `.zip` from [Releases](https://github.com/Starladdey/nfsu2-save-editor/releases) or clone this repository.
    - Open `index.html` in your browser to load and edit local save files.
-   - *Tests:* `node --test tests/*.test.mjs` (no dependencies; uses a synthetic `GLOBALB.BUN`).
-   - *Note:* To use the `Try Demo`, `Starter 0%`, or `100% Sandbox` buttons locally, run a local HTTP server in the project folder (for example, `npx serve` or `python -m http.server 8000`), as browsers block `fetch()` requests over `file://`.
+   - *Tests:* `node --test tests/*.test.mjs` (no dependencies). Career tests also need the game data: `NFSU2_GAMEDATA=/path/to/GLOBAL/GlobalB.lzc node --test tests/*.test.mjs`.
+   - *Note:* To use the `Try Demo`, or `Starter 0%` buttons locally, run a local HTTP server in the project folder (for example, `npx serve` or `python -m http.server 8000`), as browsers block `fetch()` requests over `file://`.
 
 ## Credits & Disclaimer
 - [NFSU2 Save File Technical Documentation](https://github.com/hackch/NFSU2-Savegame-Editor/blob/main/technical.md)
   - Technical research on save file structure and decryption.
 - [hackch/NFSU2-Savegame-Editor](https://github.com/hackch/NFSU2-Savegame-Editor) (MIT, © 2025 Christopher Hack)
-  - The `GLOBALB.BUN` part-database reader and visual-slot rules in `js/visual-editor.js` are adapted from this project.
+  - The `GLOBALB.BUN` part-database reader and visual-slot rules in `js/visual-editor.js`, and the career completion in `js/career.js`, are adapted from this project.
 - Special thanks to players on r/NFSU2 for testing and feedback.
 
 Unofficial non-commercial fan project. Not affiliated with, endorsed, or sponsored by Electronic Arts Inc. (EA).

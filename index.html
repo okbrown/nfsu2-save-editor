@@ -461,26 +461,27 @@
               <h2>100% Sandbox Mode</h2>
               <span class="mode-pill pill-sandbox">ALL 5 SLOTS</span>
             </div>
-            <span class="help-tip" tabindex="0" data-tooltip="Applies the verified 100% completed career progression state (Stage 5, all 5 sponsor garage slots, full city map, and 100% of shop parts) while keeping your profile name, cash, and existing garage cars.">?</span>
+            <span class="help-tip" tabindex="0" data-tooltip="Wins every career event and photo goal defined in your game data, completes all stages and discovers every shop, so the game itself reports 100%. Keeps your profile name, cash and garage cars.">?</span>
           </div>
           <div class="card-body sandbox-body">
             <div class="sandbox-feature-list">
               <p class="panel-intro">
-                Convert your save into a complete <strong>Stage 5 Sandbox</strong> while keeping your profile name, bank cash, and existing garage vehicles:
+                Complete <strong>100% of the career</strong> from your game's own goals, keeping your profile name, cash and garage cars:
               </p>
               <ul class="feature-bullets">
-                <li>Unlocks all <strong>5 Sponsor Garage Slots</strong> in career</li>
-                <li>Opens the entire Bayview city map (Stages 1–5)</li>
-                <li>Unlocks 100% of Body, Performance &amp; Specialty shop parts</li>
-                <li>Applies <strong>Stage 3 + All 9 Outrun Uniques</strong> to occupied cars</li>
+                <li>Wins all <strong>224 career events</strong> and <strong>30 photo goals</strong></li>
+                <li>Completes Stages 1–5 and moves to the post-career stage (whole city open)</li>
+                <li>Discovers every shop, so all shop parts and Car Lot cars pass their career gates</li>
+                <li>Opens all <strong>5 garage slots</strong></li>
               </ul>
               <div class="sandbox-note">
-                Note: Because this sets the storyline to 100% completed, story campaign races on the map are marked as finished. Want 0% races instead? Click <strong> Starter 0% + Unlocked</strong> in the top bar!
+                Needs your game data (<code>GLOBAL\GlobalB.lzc</code>). Nothing is copied from another save; your money, cars and rewards are left as they are.
               </div>
+              <p id="careerStatus" class="sandbox-note"></p>
             </div>
 
             <button id="btnMasterUnlock100" class="btn btn-primary btn-block btn-lg" type="button">
-              Apply 100% Complete World
+              Complete Career (100%)
             </button>
           </div>
         </div>
@@ -574,6 +575,7 @@
 
   <script src="js/app.bundle.min.js"></script>
   <script src="js/visual-editor.js"></script>
+  <script src="js/career.js"></script>
   <script>
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
