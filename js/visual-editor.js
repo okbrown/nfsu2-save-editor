@@ -33,6 +33,20 @@
   /** Record +0x0C (base +4): non-zero when the record is listed in the frontend. */
   const CUSTOM_ENABLED_REL = 4;
   const CAREER_SAVE_SIZE = 0xd6b6;
+  /** Garage records only: bytes from the editor base to the end of the 2,034-byte native record. */
+  const GARAGE_RECORD_LEN = 0x7ea;
+  const CUSTOM_RECORD_LEN = CUSTOM_RECORD_STRIDE - CUSTOM_BASE_REL;
+
+  /**
+   * Garage records only: "owned rims" bitset of the purchased-parts subobject (subobject +0x16C,
+   * 256 bytes = 2,048 bits). The Body Parts Storage screen padlocks Rims while no bit is set.
+   * Bit n is the rim at position n + 1 of the car's compatible-rims list (position 0 is the stock
+   * rim, which is never purchased). Traced in the PS2 build (owned check 0x27A630, setter 0x27A460)
+   * and confirmed against the purchased rims in assets/JANE.
+   */
+  const OWNED_RIMS_REL = 0x596;
+  const OWNED_RIMS_BITS = 2048;
+  const RIM_SLOT = 29;
 
   function gameHash(name) {
     let hash = 0xffffffff;
@@ -189,6 +203,43 @@
   // GLOBALB.BUN reader
   // ---------------------------------------------------------------------------
 
+  /**
+   * EA's JDLZ compression: the PC game ships GLOBAL\\GlobalB.lzc, a JDLZ-packed GLOBALB.BUN.
+   * Header: "JDLZ", 0x02, 0x10, 2 bytes padding, uncompressed size, compressed size (uint32 LE).
+   */
+  function isJdlz(bytes) {
+    return bytes.length >= 16 && bytes[0] === 0x4a && bytes[1] === 0x44 && bytes[2] === 0x4c && bytes[3] === 0x5a;
+  }
+
+  function decompressJdlz(bytes) {
+    if (!isJdlz(bytes) || bytes[4] !== 2 || bytes[5] !== 0x10) throw new Error('Unsupported JDLZ file.');
+    const size = view(bytes).getUint32(8, true), out = new Uint8Array(size);
+    let i = 16, o = 0, flags1 = 1, flags2 = 1;
+    while (i < bytes.length && o < size) {
+      if (flags1 === 1) flags1 = bytes[i++] | 0x100;
+      if (flags2 === 1) flags2 = bytes[i++] | 0x100;
+      if (flags1 & 1) {
+        let length, distance;
+        if (flags2 & 1) {
+          length = (bytes[i + 1] | ((bytes[i] & 0xf0) << 4)) + 3;
+          distance = (bytes[i] & 0x0f) + 1;
+        } else {
+          distance = (bytes[i + 1] | ((bytes[i] & 0xe0) << 3)) + 17;
+          length = (bytes[i] & 0x1f) + 3;
+        }
+        i += 2;
+        if (distance > o || o + length > size) throw new Error('Corrupt JDLZ data.');
+        for (let k = 0; k < length; k++, o++) out[o] = out[o - distance];
+        flags2 >>= 1;
+      } else {
+        out[o++] = bytes[i++];
+      }
+      flags1 >>= 1;
+    }
+    if (o !== size) throw new Error('Truncated JDLZ data.');
+    return out;
+  }
+
   const CHUNK_CARS = 0x34600;
   const CAR_STRIDE = 0x890;
   const CAR_HASH_REL = 0xd0;
@@ -210,7 +261,8 @@
   }
 
   function parseGameData(input) {
-    const bytes = input instanceof Uint8Array ? input : new Uint8Array(input);
+    let bytes = input instanceof Uint8Array ? input : new Uint8Array(input);
+    if (isJdlz(bytes)) bytes = decompressJdlz(bytes);
     const dv = view(bytes);
     const chunks = new Map();
     (function walk(start, end) {
@@ -437,6 +489,33 @@
     }));
   }
 
+  /** Aftermarket rims for this car and the owned-rims bit each one uses. */
+  function rimBits(catalog, car) {
+    const rims = catalog.options(car, RIM_SLOT);
+    const out = [];
+    for (let n = 0; n + 1 < rims.length && n < OWNED_RIMS_BITS; n++) {
+      const part = rims[n + 1];
+      if (part.level > 0 && part.name !== 'DUMMY') out.push({ bit: n, part });
+    }
+    return out;
+  }
+
+  function ownedRimCount(catalog, bytes, base) {
+    const dv = view(bytes), start = base + OWNED_RIMS_REL;
+    return rimBits(catalog, readCarHash(bytes, base))
+      .filter(({ bit }) => (dv.getUint32(start + (bit >> 5) * 4, true) >>> (bit & 31)) & 1).length;
+  }
+
+  /** Marks every aftermarket rim of this garage car as purchased, so Body Parts Storage lists them. */
+  function unlockAllRims(catalog, bytes, base) {
+    const dv = view(bytes), start = base + OWNED_RIMS_REL;
+    for (const { bit } of rimBits(catalog, readCarHash(bytes, base))) {
+      const at = start + (bit >> 5) * 4;
+      dv.setUint32(at, (dv.getUint32(at, true) | (1 << (bit & 31))) >>> 0, true);
+    }
+    return bytes;
+  }
+
   // ---------------------------------------------------------------------------
   // UI
   // ---------------------------------------------------------------------------
@@ -490,7 +569,7 @@
     return new Promise((resolve) => {
       const input = document.createElement('input');
       input.type = 'file';
-      input.accept = '.bun,.BUN';
+      input.accept = '.bun,.BUN,.lzc,.LZC';
       input.addEventListener('change', async () => {
         const file = input.files && input.files[0];
         if (!file) return resolve(false);
@@ -498,7 +577,7 @@
           loadGameData(await file.arrayBuffer(), file.name);
           resolve(true);
         } catch (err) {
-          toast(`GLOBALB.BUN error: ${err.message}`);
+          toast(`Game data error: ${err.message}`);
           resolve(false);
         }
       });
@@ -509,7 +588,7 @@
   // --- Dialog ---------------------------------------------------------------
 
   let dialog = null;
-  let state = null; // { title, bytes (live save bytes), base, draft (copy), tab, openPalette }
+  let state = null; // { title, getBytes, base, length, garage, draft (copy), tab, openPalette }
 
   function ensureDialog() {
     if (dialog) return dialog;
@@ -528,10 +607,12 @@
    * @param {string} title Heading, e.g. "Slot 2" or "Custom Car 3".
    * @param {() => Uint8Array} getBytes Returns the live bytes holding the record.
    * @param {number} base Record base (offset of the car's +0x00 in the editor's slot model).
+   * @param {boolean} garage Career/GARAGE.DAT record (has purchased parts) rather than a Quick Race custom car.
    */
-  function openEditor(title, getBytes, base) {
+  function openEditor(title, getBytes, base, garage) {
     const bytes = getBytes();
-    state = { title, getBytes, base, draft: bytes.slice(), tab: 'BODY', openPalette: null };
+    const length = garage ? GARAGE_RECORD_LEN : CUSTOM_RECORD_LEN;
+    state = { title, getBytes, base, length, garage, draft: bytes.slice(), tab: 'BODY', openPalette: null };
     ensureDialog();
     renderDialog();
     if (!dialog.open) dialog.showModal();
@@ -539,7 +620,7 @@
 
   function draftDirty() {
     const live = state.getBytes();
-    const start = state.base, end = state.base + PERF_REL + 68;
+    const start = state.base, end = state.base + state.length;
     for (let i = start; i < end; i++) if (live[i] !== state.draft[i]) return true;
     return false;
   }
@@ -559,8 +640,8 @@
       dialog.innerHTML = head + `
         <div class="ve-body ve-empty">
           <p>Part lists (rims, spoilers, body kits, paints…) come from your own copy of the game, so the editor only offers parts that fit this car.</p>
-          <p>Load <code>GLOBAL\\GLOBALB.BUN</code> from your NFSU2 install folder. It is read locally and never uploaded.</p>
-          <button type="button" class="btn btn-primary btn-sm" data-ve="load-bun">Load GLOBALB.BUN…</button>
+          <p>Load <code>GLOBAL\\GlobalB.lzc</code> (or an unpacked <code>GLOBALB.BUN</code>) from your NFSU2 install folder. It is read locally and never uploaded.</p>
+          <button type="button" class="btn btn-primary btn-sm" data-ve="load-bun">Load game data…</button>
         </div>`;
       return;
     }
@@ -576,7 +657,8 @@
       groups.get(slot.category).push(slot);
     }
     const sections = [...groups].map(([cat, slots]) => {
-      const rows = slots.map((slot) => renderSlotRow(slot, car, refs)).filter(Boolean).join('');
+      let rows = slots.map((slot) => renderSlotRow(slot, car, refs)).filter(Boolean).join('');
+      if (cat === 'Wheels' && state.garage) rows += renderOwnedRims(car);
       return rows ? `<section class="ve-group"><h3>${escapeHtml(cat)}</h3>${rows}</section>` : '';
     }).join('');
     const dirty = draftDirty();
@@ -630,6 +712,20 @@
       </label>`;
   }
 
+  function renderOwnedRims(car) {
+    const total = rimBits(catalog, car).length;
+    const owned = ownedRimCount(catalog, state.draft, state.base);
+    return `
+      <div class="ve-row">
+        <span class="ve-label">Owned rims <em>(Body Parts Storage)</em></span>
+        <span class="ve-owned">
+          <span>${owned} of ${total}</span>
+          <button type="button" class="btn btn-xs btn-secondary" data-ve="unlock-rims" ${owned === total ? 'disabled' : ''}
+            title="Mark every aftermarket rim for this car as purchased, so the garage's Body Parts Storage lists them">Unlock all rims</button>
+        </span>
+      </div>`;
+  }
+
   function setDraft(slot, hash) {
     try {
       catalog.edit(state.draft, state.base, slot, hash);
@@ -666,13 +762,15 @@
       case 'load-bun':
         if (await pickGameData()) renderDialog();
         return;
+      case 'unlock-rims':
+        unlockAllRims(catalog, state.draft, state.base);
+        return renderDialog();
       case 'discard':
         state.draft = state.getBytes().slice();
         return renderDialog();
       case 'apply': {
         const live = state.getBytes();
-        const end = state.base + PERF_REL + 68;
-        live.set(state.draft.subarray(state.base, end), state.base);
+        live.set(state.draft.subarray(state.base, state.base + state.length), state.base);
         const b = bridge();
         if (b) b.refresh();
         toast(`${state.title}: visual changes applied`);
@@ -703,7 +801,7 @@
         const gdat = s.isEditingGarageDat();
         const base = bridge().slotOffsets(slot, gdat).visualBase;
         const number = gdat ? slot + 6 : slot + 1;
-        openEditor(`Slot ${number}`, () => currentSave().getActiveBytes(), base);
+        openEditor(`Slot ${number}`, () => currentSave().getActiveBytes(), base, true);
       });
       actions.prepend(btn);
     });
@@ -727,7 +825,7 @@
             <span class="subtitle-inline">The cars from Quick Race → Customize, stored separately from your career garage</span>
           </div>
         </div>
-        <button type="button" class="btn btn-secondary btn-sm" data-ve-load-bun>Load GLOBALB.BUN</button>
+        <button type="button" class="btn btn-secondary btn-sm" data-ve-load-bun>Load game data</button>
       </div>
       <div class="ve-custom-list"></div>`;
     customCard.querySelector('[data-ve-load-bun]').addEventListener('click', pickGameData);
@@ -735,7 +833,7 @@
       const btn = e.target.closest('[data-ve-custom]');
       if (!btn) return;
       const index = Number(btn.dataset.veCustom);
-      openEditor(`Custom Car ${index + 1}`, () => currentSave().workingBytes, customCarBase(index));
+      openEditor(`Custom Car ${index + 1}`, () => currentSave().workingBytes, customCarBase(index), false);
     });
     garageCard.after(customCard);
     return customCard;
@@ -746,7 +844,7 @@
     const card = ensureCustomCard();
     if (!card) return;
     const loadBtn = card.querySelector('[data-ve-load-bun]');
-    loadBtn.textContent = catalog ? `✓ ${catalogFile}` : 'Load GLOBALB.BUN';
+    loadBtn.textContent = catalog ? `✓ ${catalogFile}` : 'Load game data';
     const list = card.querySelector('.ve-custom-list');
     if (!save || save.isGarageDatFile) {
       card.hidden = !save ? true : false;
@@ -780,7 +878,8 @@
   }
 
   root.NFSU2Visual = {
-    gameHash, parseGameData, loadGameData, readVisual, readCarHash, listCustomCars, customCarBase, colorPalettes,
+    gameHash, parseGameData, decompressJdlz, loadGameData, readVisual, rimBits, ownedRimCount, unlockAllRims,
+    OWNED_RIMS_REL, readCarHash, listCustomCars, customCarBase, colorPalettes,
     VisualCatalog, VISUAL_SLOTS, VISUAL_COUNT, VISUAL_REL, PERF_REL,
   };
 

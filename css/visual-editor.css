@@ -204,3 +204,10 @@
     grid-template-columns: 1fr;
   }
 }
+
+.ve-owned {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font: 12px var(--font-mono);
+}

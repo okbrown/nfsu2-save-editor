@@ -113,3 +113,30 @@ test('custom-car edits stay inside their 0x430-byte record', () => {
   assert.ok(diff.length > 0);
   assert.ok(diff.every((i) => i >= start && i < end));
 });
+
+test('JDLZ (GlobalB.lzc) literals and back-references decompress', () => {
+  const payload = [0x08, 0x01, 0x41, 0x42, 0x43, 0x02, 0x03]; // ABC, then copy 6 bytes from 3 back
+  const file = new Uint8Array(16 + payload.length), dv = new DataView(file.buffer);
+  file.set([0x4a, 0x44, 0x4c, 0x5a, 0x02, 0x10]);
+  dv.setUint32(8, 9, true);
+  dv.setUint32(12, file.length, true);
+  file.set(payload, 16);
+  assert.equal(new TextDecoder().decode(V.decompressJdlz(file)), 'ABCABCABC');
+  dv.setUint32(8, 20, true);
+  assert.throws(() => V.decompressJdlz(file), /Truncated JDLZ/);
+});
+
+test('unlocking rims sets one owned bit per aftermarket rim and nothing else', () => {
+  const cat = V.parseGameData(buildBun(PARTS));
+  // Compatible rims: WHEEL_STYLE01 (stock, never purchased) then WHEEL_STYLE02 -> bit 0.
+  assert.deepEqual(V.rimBits(cat, CAR).map((r) => [r.bit, r.part.name]), [[0, 'WHEEL_STYLE02']]);
+  const save = jane(), base = GARAGE_BASE;
+  assert.equal(V.ownedRimCount(cat, save, base), 0);
+  const untouched = save.slice();
+  V.unlockAllRims(cat, save, base);
+  assert.equal(V.ownedRimCount(cat, save, base), 1);
+  const diff = changed(untouched, save);
+  assert.ok(diff.every((i) => i >= base + V.OWNED_RIMS_REL && i < base + V.OWNED_RIMS_REL + 256));
+  V.unlockAllRims(cat, save, base);
+  assert.deepEqual(changed(untouched, save), diff, 'idempotent');
+});

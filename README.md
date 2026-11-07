@@ -28,7 +28,8 @@ Browser-based utility for editing **Need for Speed: Underground 2** career save 
   - **100% Sandbox Mode:** Apply a 100% completed Stage 5 world while keeping your profile name, cash, and current garage cars.
 - **Visual Customisation (Rims, Spoilers, Paint & more):**
   - Change body kits, spoilers, hoods, rims, spinners, paint (body, rims, calipers, spoiler…), vinyls, decals, window tint, neons, hydraulics and custom gauges for any garage car (Slots 1–10).
-  - Part lists come from your own game's `GLOBAL\GLOBALB.BUN` (read locally, never uploaded), so only parts that fit the selected car are offered.
+  - Part lists come from your own game's `GLOBAL\GlobalB.lzc` (PC install/disc) or an unpacked `GLOBALB.BUN`, read locally and never uploaded, so only parts that fit the selected car are offered.
+  - **Unlock all rims:** marks every aftermarket rim as purchased for a garage car, so the garage's *Body Parts Storage* no longer padlocks Rims.
 - **Quick Race Custom Cars:**
   - Lists the cars you built in *Quick Race → Customize* (stored separately from the career garage) and lets you edit their visuals in the same editor.
 - **JSON Car Patches & Checksums:**
