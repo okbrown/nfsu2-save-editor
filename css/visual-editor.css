@@ -205,13 +205,6 @@
   }
 }
 
-.ve-owned {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  font: 12px var(--font-mono);
-}
-
 .ve-group h3 {
   display: flex;
   align-items: center;

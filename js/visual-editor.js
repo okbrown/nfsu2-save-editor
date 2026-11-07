@@ -37,28 +37,19 @@
   const GARAGE_RECORD_LEN = 0x7ea;
   const CUSTOM_RECORD_LEN = CUSTOM_RECORD_STRIDE - CUSTOM_BASE_REL;
 
-  /**
-   * Garage records only: "owned rims" bitset of the purchased-parts subobject (subobject +0x16C,
-   * 256 bytes = 2,048 bits). The Body Parts Storage screen padlocks Rims while no bit is set.
-   * Bit n is the rim at position n + 1 of the car's compatible-rims list (position 0 is the stock
-   * rim, which is never purchased). Traced in the PS2 build (owned check 0x27A630, setter 0x27A460)
-   * and confirmed against the purchased rims in assets/JANE.
-   */
-  const OWNED_RIMS_REL = 0x596;
   /** Garage records only: the purchased-parts subobject (Body Parts Storage) starts at base + 0x42A. */
   const PURCHASED_REL = 0x42a;
   /**
    * Ownership fields of the purchased-parts subobject, as serialized offsets and byte lengths.
    * Per-item 32-bit masks of owned variants for the career items the garage storage checks
    * (PS2 0x27A630/0x27A720; items from the slot table filled at 0x272CF8), then the separate
-   * owned bitsets: rims (runtime +364), roof scoops (+620), spoilers (+636), wing mirrors (+652),
+   * owned bitsets: rims (runtime +364; bit n is the n-th compatible rim of its group, so the stock rim
+   * is never bought), roof scoops (+620), spoilers (+636), wing mirrors (+652),
    * hoods (+660, serialized +0x298) and NOS purge (+668, serialized +0x3B0). Checked against every
    * part bought in assets/JANE. Body paint, vinyl layers and five accent paints are never tracked.
    */
   const OWNED_ITEMS = Array.from({ length: 73 }, (_, i) => i + 14).filter((item) => ![20, 71, 72, 73].includes(item));
   const OWNED_AREAS = [[0x16c, 256], [0x26c, 16], [0x27c, 16], [0x28c, 8], [0x298, 8], [0x3b0, 16]];
-  const OWNED_RIMS_BITS = 2048;
-  const RIM_SLOT = 29;
 
   function gameHash(name) {
     let hash = 0xffffffff;
@@ -558,33 +549,6 @@
     }));
   }
 
-  /** Aftermarket rims for this car and the owned-rims bit each one uses. */
-  function rimBits(catalog, car) {
-    const rims = catalog.options(car, RIM_SLOT);
-    const out = [];
-    for (let n = 0; n + 1 < rims.length && n < OWNED_RIMS_BITS; n++) {
-      const part = rims[n + 1];
-      if (part.level > 0 && part.name !== 'DUMMY') out.push({ bit: n, part });
-    }
-    return out;
-  }
-
-  function ownedRimCount(catalog, bytes, base) {
-    const dv = view(bytes), start = base + OWNED_RIMS_REL;
-    return rimBits(catalog, readCarHash(bytes, base))
-      .filter(({ bit }) => (dv.getUint32(start + (bit >> 5) * 4, true) >>> (bit & 31)) & 1).length;
-  }
-
-  /** Marks every aftermarket rim of this garage car as purchased, so Body Parts Storage lists them. */
-  function unlockAllRims(catalog, bytes, base) {
-    const dv = view(bytes), start = base + OWNED_RIMS_REL;
-    for (const { bit } of rimBits(catalog, readCarHash(bytes, base))) {
-      const at = start + (bit >> 5) * 4;
-      dv.setUint32(at, (dv.getUint32(at, true) | (1 << (bit & 31))) >>> 0, true);
-    }
-    return bytes;
-  }
-
   /**
    * Marks every part of every category as bought for this garage car, so the garage's Body Parts
    * Storage lists them all. Touches only the ownership fields above; needs no game data.
@@ -750,7 +714,6 @@
     }
     const sections = [...groups].map(([cat, slots]) => {
       let rows = slots.map((slot) => renderSlotRow(slot, car, refs)).filter(Boolean).join('');
-      if (cat === 'Wheels' && state.garage) rows += renderOwnedRims(car);
       return rows ? `<section class="ve-group"><h3><span>${escapeHtml(cat)}</span>
         <button type="button" class="btn btn-xs btn-ghost" data-ve-reset="${escapeHtml(cat)}">Reset to stock</button></h3>${rows}</section>` : '';
     }).join('');
@@ -759,8 +722,6 @@
       <div class="garage-mode-tabs ve-tabs" role="tablist">${tabs}</div>
       <div class="ve-body">${sections || '<p class="ve-empty">No editable parts for this car in this category.</p>'}</div>
       <div class="ve-foot">
-        ${state.garage ? `<button type="button" class="btn btn-secondary btn-sm" data-ve="own-all" ${ownsAllParts(state.draft, state.base) ? 'disabled' : ''}
-          title="Mark every rim, spoiler, body part, vinyl, decal and specialty as bought for this car, so the garage's Body Parts Storage lists them all">Own every part</button>` : ''}
         <button type="button" class="btn btn-ghost btn-sm" data-ve="reset-all" title="Every part, paint, vinyl, decal and specialty back to what the game gives a new car">Reset whole car to stock</button>
         <span class="ve-note">${dirty ? 'Unapplied changes' : 'No changes'}</span>
         <button type="button" class="btn btn-ghost btn-sm" data-ve="discard" ${dirty ? '' : 'disabled'}>Discard</button>
@@ -826,29 +787,6 @@
       </label>`;
   }
 
-  function renderOwnedRims(car) {
-    const total = rimBits(catalog, car).length;
-    const owned = ownedRimCount(catalog, state.draft, state.base);
-    return `
-      <div class="ve-row">
-        <span class="ve-label">Owned rims <em>(Body Parts Storage)</em></span>
-        <span class="ve-owned">
-          <span>${owned} of ${total}</span>
-          <button type="button" class="btn btn-xs btn-secondary" data-ve="unlock-rims" ${owned === total ? 'disabled' : ''}
-            title="Mark every aftermarket rim for this car as purchased, so the garage's Body Parts Storage lists them">Unlock all rims</button>
-        </span>
-      </div>`;
-  }
-
-  function setDraft(slot, hash) {
-    try {
-      catalog.edit(state.draft, state.base, slot, hash);
-    } catch (err) {
-      toast(err.message);
-    }
-    renderDialog();
-  }
-
   function resetDraft(slots, label) {
     const skipped = catalog.resetToStock(state.draft, state.base, slots);
     if (skipped.length) {
@@ -889,14 +827,8 @@
       case 'load-bun':
         if (await pickGameData()) renderDialog();
         return;
-      case 'own-all':
-        ownAllParts(state.draft, state.base);
-        return renderDialog();
       case 'reset-all':
         return resetDraft(undefined, 'Whole car');
-      case 'unlock-rims':
-        unlockAllRims(catalog, state.draft, state.base);
-        return renderDialog();
       case 'discard':
         state.draft = state.getBytes().slice();
         return renderDialog();
@@ -1010,8 +942,8 @@
   }
 
   root.NFSU2Visual = {
-    gameHash, ownAllParts, ownsAllParts, PURCHASED_REL, isNoneSlot, DEFAULT_VINYL_COLOURS, parseGameData, decompressJdlz, loadGameData, pickGameData, readVisual, rimBits, ownedRimCount, unlockAllRims,
-    OWNED_RIMS_REL, readCarHash, listCustomCars, customCarBase, colorPalettes,
+    gameHash, ownAllParts, ownsAllParts, PURCHASED_REL, isNoneSlot, DEFAULT_VINYL_COLOURS, parseGameData, decompressJdlz,
+    loadGameData, pickGameData, readVisual, readCarHash, listCustomCars, customCarBase, colorPalettes,
     VisualCatalog, VISUAL_SLOTS, VISUAL_COUNT, VISUAL_REL, PERF_REL,
   };
 

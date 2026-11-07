@@ -7,6 +7,7 @@ import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
 require('../js/visual-editor.js');
+require('../js/career-data.js');
 require('../js/career.js');
 const V = globalThis.NFSU2Visual, C = globalThis.NFSU2Career;
 const save = (name) => new Uint8Array(readFileSync(new URL(`../assets/${name}`, import.meta.url)));
@@ -75,6 +76,48 @@ test('after owning every part, each bought-part index the game uses is set', { s
   }
 });
 
+test('Unlock Everything works from the built-in goals, without game files', () => {
+  const builtin = C.builtinDatabase();
+  const career = save('DEMO'), garage = new Uint8Array(10202);
+  garage.set([0x4e, 0x32, 0x47, 0x41]);
+  for (let i = 0; i < 5; i++) garage[0x28 + i * 0x7f2 + 0x429] = i === 0 ? 1 : 0; // one bought car in slot 6
+  const fake = { isGarageDatFile: false, workingBytes: career, garageDatWorking: garage, hasGarageDatLoaded: () => true };
+  const result = C.unlockEverything(fake, builtin);
+  assert.deepEqual(result, { career: true, slots: 10, cars: [1, 6] });
+  const report = C.careerReport(career, builtin);
+  assert.equal(report.percent, 100);
+  assert.deepEqual(locked(report), []);
+  assert.deepEqual(report.lockedSlots, []);
+  for (const [bytes, base] of [[career, 0x5870], [garage, 0x28]]) {
+    assert.ok(V.ownsAllParts(bytes, base));
+    assert.deepEqual(Array.from({ length: 9 }, (_, i) => new DataView(bytes.buffer).getUint32(base + 0x2e8 + i * 4, true)), Array(9).fill(1));
+  }
+  for (let i = 0; i < 5; i++) assert.equal(garage[0x28 + i * 0x7f2 + 0x428], 0, `slot ${i + 6} open`);
+  // An empty slot is opened but not given parts.
+  assert.ok(!V.ownsAllParts(career, 0x5870 + 0x7f2));
+});
+
+test('the built-in goals match the game data', { skip }, () => {
+  const fromGame = db(), builtin = C.builtinDatabase();
+  const strip = (d) => JSON.stringify({
+    events: [...d.events.values()].map((e) => [e.hash, e.stage, e.kind, e.special]),
+    photos: d.photos, stages: d.stages, parts: d.parts, carGates: d.carGates,
+    shops: d.shops.map((s) => [s.hash, s.stage, s.gate, s.requirement, s.discovery]), cars: d.cars.map((c) => c.hash),
+  });
+  assert.equal(strip(builtin), strip(fromGame));
+});
+
+test('the GARAGE.DAT fingerprint follows the edited career (nfsu2-web FNV-1a 64)', () => {
+  const career = save('JANE'), garage = new Uint8Array(10202);
+  C.syncGarageFingerprint(career, garage);
+  let h = 0xcbf29ce484222325n;
+  for (let i = 36; i < 36 + 39230; i++) h = BigInt.asUintN(64, (h ^ BigInt(career[i])) * 0x100000001b3n);
+  assert.equal(new DataView(garage.buffer).getBigUint64(8, true), h);
+  career[0x5870 + 0x42a] ^= 1;
+  C.syncGarageFingerprint(career, garage);
+  assert.notEqual(new DataView(garage.buffer).getBigUint64(8, true), h, 'a car edit changes the fingerprint');
+});
+
 test('the bundle carries the save-safety patches', () => {
   const bundle = readFileSync(new URL('../js/app.bundle.min.js', import.meta.url), 'utf8');
   assert.match(bundle, /'STAGE':0xa175,/, 'stage display reads the real career stage');
@@ -82,4 +125,5 @@ test('the bundle carries the save-safety patches', () => {
   assert.doesNotMatch(bundle, /<0x5&&\(this\['workingBytes'\]\[_0x376147/, '"Enable All 5 Slots" does not set stage 5');
   assert.match(bundle, /'DEFAULT_USED_SLOT_HEADER_HEX':'38 39 26 3D 3E 96 AC A5/, 'stock tint/neon defaults');
   assert.match(bundle, /globalThis\.NFSU2Bridge=/, 'bridge for js/visual-editor.js and js/career.js');
+  assert.match(bundle, /globalThis\.NFSU2SyncGarageFingerprint\(this\['workingBytes'\]/, 'GARAGE.DAT fingerprint refreshed on export');
 });

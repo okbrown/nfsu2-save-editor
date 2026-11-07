@@ -126,21 +126,6 @@ test('JDLZ (GlobalB.lzc) literals and back-references decompress', () => {
   assert.throws(() => V.decompressJdlz(file), /Truncated JDLZ/);
 });
 
-test('unlocking rims sets one owned bit per aftermarket rim and nothing else', () => {
-  const cat = V.parseGameData(buildBun(PARTS));
-  // Compatible rims: WHEEL_STYLE01 (stock, never purchased) then WHEEL_STYLE02 -> bit 0.
-  assert.deepEqual(V.rimBits(cat, CAR).map((r) => [r.bit, r.part.name]), [[0, 'WHEEL_STYLE02']]);
-  const save = jane(), base = GARAGE_BASE;
-  assert.equal(V.ownedRimCount(cat, save, base), 0);
-  const untouched = save.slice();
-  V.unlockAllRims(cat, save, base);
-  assert.equal(V.ownedRimCount(cat, save, base), 1);
-  const diff = changed(untouched, save);
-  assert.ok(diff.every((i) => i >= base + V.OWNED_RIMS_REL && i < base + V.OWNED_RIMS_REL + 256));
-  V.unlockAllRims(cat, save, base);
-  assert.deepEqual(changed(untouched, save), diff, 'idempotent');
-});
-
 test('the game\'s empty value is only allowed where the game itself stores 0', () => {
   const cat = V.parseGameData(buildBun(PARTS));
   for (const slot of [31, 64, 67, 68, 73, 76, 105, 152]) assert.ok(V.isNoneSlot(slot), `slot ${slot}`);

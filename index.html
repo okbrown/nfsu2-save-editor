@@ -67,7 +67,7 @@
       "Get Rachel's Nissan 350Z, Caleb's Pontiac GTO and regional exclusive cars",
       "Install all 9 Outrun Unique performance parts and Stage 3 / Extreme performance",
       "Dyno curve presets (Power, Drag, Drift) per garage slot",
-      "Unlock hidden shops, Car Lot vehicles and a 100% Stage 5 sandbox",
+      "One-click Unlock Everything: 100% career, every shop part, Car Lot car and garage slot, and every part owned on your cars",
       "Import and export custom .json car patches",
       "Load .zip save archives and edit saves from nfsu2.xyz",
       "Automatic CRC-32 checksum recalculation and optional .bak backup"
@@ -244,9 +244,7 @@
         <button id="btnLoadDemo" class="btn btn-amber-outline btn-sm" type="button" title="Load clean 0% Demo Save to test all features">
           Try Demo
         </button>
-        <button id="btnLoadStarter" class="btn btn-amber-outline btn-sm" type="button" title="Load 0% races Starter Save with $999,999, all 5 slots, Stage 3 &amp; 9 Outrun Uniques unlocked">
-          Starter 0% + Unlocked
-        </button>
+        <span aria-hidden="true"></span>
         <button id="btnDownloadSave" class="btn btn-primary btn-sm btn-download" type="button" disabled>
           Download Save
         </button>
@@ -413,82 +411,34 @@
         </div>
       </section>
 
-      <!-- COLUMN 3: UNLOCKS & 100% SANDBOX MODE (PROMINENT RIGHT PANEL) -->
+      <!-- COLUMN 3: ONE-BUTTON UNLOCK -->
       <section class="panel-col col-right">
-        
-        <!-- Mode 1: Safe Career Add-ons (Keeps Active Races) -->
-        <div class="card">
-          <div class="card-header">
-            <div class="header-title-row">
-              <h2>Safe Career Add-ons</h2>
-              <span class="mode-pill pill-safe">KEEPS RACES</span>
-            </div>
-            <span class="help-tip" tabindex="0" data-tooltip="Unlocks all 420-byte per-car part tables (Body, Vinyls, Specialties), 25 Car Lot vehicles, and hidden map shops while keeping your active storyline races intact.">?</span>
-          </div>
-          <div class="card-body">
-            <p class="panel-intro">
-              Enhance your current career without skipping storyline races or boss progression:
-            </p>
-            <div class="unlock-grid">
-              <button type="button" class="btn btn-unlock-cat" data-unlock-cat="SPECIAL_UNIQUE">
-                <span class="cat-name">Special Parts</span>
-                <span class="cat-sub">Body, Hoods &amp; Vinyls</span>
-              </button>
-              <button type="button" class="btn btn-unlock-cat" data-unlock-cat="CAR_LOT_ALL">
-                <span class="cat-name">Car Lots</span>
-                <span class="cat-sub">Unlock Catalog Table</span>
-              </button>
-              <button type="button" class="btn btn-unlock-cat" data-unlock-cat="HIDDEN_SHOPS">
-                <span class="cat-name">Reveal Shops</span>
-                <span class="cat-sub">All Map Shop Icons</span>
-              </button>
-              <button type="button" class="btn btn-unlock-cat" data-unlock-cat="SHOP_PARTS_ALL">
-                <span class="cat-name">Lvl 3 Perf Tiers</span>
-                <span class="cat-sub">Stage 3 &amp; Shop Unlocks</span>
-              </button>
-            </div>
-
-            <button id="btnUnlockAllParts" class="btn btn-amber-outline btn-block mt-md" type="button">
-              Unlock All Safe Add-ons Together
-            </button>
-          </div>
-        </div>
-
-        <!-- Mode 2: 100% Sandbox Mode -->
         <div class="card flex-fill">
           <div class="card-header">
             <div class="header-title-row">
-              <h2>100% Sandbox Mode</h2>
-              <span class="mode-pill pill-sandbox">ALL 5 SLOTS</span>
+              <h2>Unlock Everything</h2>
+              <span class="mode-pill pill-sandbox">100%</span>
             </div>
-            <span class="help-tip" tabindex="0" data-tooltip="Wins every career event and photo goal defined in your game data, completes all stages and discovers every shop, so the game itself reports 100%. Keeps your profile name, cash and garage cars.">?</span>
           </div>
           <div class="card-body sandbox-body">
             <div class="sandbox-feature-list">
               <p class="panel-intro">
-                Complete <strong>100% of the career</strong> from your game's own goals, keeping your profile name, cash and garage cars:
+                One click gives you a fully unlocked game. Your profile name, money and cars stay as they are.
               </p>
               <ul class="feature-bullets">
-                <li>Wins all <strong>224 career events</strong> and <strong>30 photo goals</strong></li>
-                <li>Completes Stages 1–5 and moves to the post-career stage (whole city open)</li>
-                <li>Discovers every shop, so all shop parts and Car Lot cars pass their career gates</li>
-                <li>Opens all <strong>5 garage slots</strong></li>
+                <li>Career <strong>100% complete</strong>: every race, sponsor event and photo goal won, the whole city open</li>
+                <li>Every shop found, every <strong>shop part</strong> and <strong>Car Lot car</strong> unlocked</li>
+                <li>All <strong>garage slots</strong> open (1–5, and 6–10 with GARAGE.DAT)</li>
+                <li>Every car in your garage <strong>owns every part</strong>: rims, spoilers, body kits, vinyls, decals, specialties and performance parts, so nothing shows a padlock when you customise in the game</li>
+                <li>All <strong>9 Outrun Unique</strong> upgrades on every car</li>
               </ul>
-              <div class="sandbox-note">
-                Needs your game data (<code>GLOBAL\GlobalB.lzc</code>). Nothing is copied from another save; your money, cars and rewards are left as they are.
-              </div>
-              <p id="careerStatus" class="sandbox-note"></p>
             </div>
 
-            <button id="btnMasterUnlock100" class="btn btn-primary btn-block btn-lg" type="button">
-              Complete Career (100%)
-            </button>
-            <button id="btnOwnAllParts" class="btn btn-secondary btn-block mt-md" type="button" title="Mark every rim, spoiler, body part, vinyl, decal and specialty as bought for each car in your garage, so Body Parts Storage lists them all">
-              Own Every Part on All Garage Cars
+            <button id="btnUnlockEverything" class="btn btn-primary btn-block btn-lg" type="button">
+              Unlock Everything
             </button>
           </div>
         </div>
-
       </section>
 
     </main>
@@ -528,8 +478,8 @@
             <p class="faq-more"><a href="guides/nfsu2-money-trainer/">Read the money trainer guide &rarr;</a></p>
             </article>
             <article class="faq-col">
-              <h3>4. Safe Career Add-ons vs. 100% Save Game Unlock</h3>
-              <p><strong>Safe Career Add-ons</strong> unlock per-car 420-byte part tables, all 25 Car Lot vehicles, and hidden shop map icons while keeping your active storyline races intact.Want a 0% career start with everything unlocked? Click <strong> Starter 0% + Unlocked</strong> in the top bar!</p>
+              <h3>4. Unlock Everything</h3>
+              <p><strong>Unlock Everything</strong> completes the career from the game's own goals (every event, photo goal and stage, so the game itself shows 100%), finds every shop, opens every garage slot and makes every car in your garage own every part and all 9 Outrun Uniques. In the game you can then fit any part from the garage's Body Parts Storage. Your name, money and cars are kept.</p>
             </article>
             <article class="faq-col">
               <h3>5. How Outrun Unique Parts &amp; Widebody Kits Work</h3>
@@ -578,6 +528,7 @@
 
   <script src="js/app.bundle.min.js"></script>
   <script src="js/visual-editor.js"></script>
+  <script src="js/career-data.js"></script>
   <script src="js/career.js"></script>
   <script>
   if ('serviceWorker' in navigator) {

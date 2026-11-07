@@ -1,8 +1,8 @@
 /*
  * NFSU2 Save Editor — career completion from the game's own goals.
  *
- * "Complete game (100%)" marks every main career event and photo goal of the
- * player's GLOBALB.BUN as done, fills each stage's result sets the way the game
+ * "Unlock Everything" marks every main career event and photo goal as done
+ * (built-in goals from js/career-data.js, or the player's own GLOBALB.BUN), fills each stage's result sets the way the game
  * does, completes stages 0-5, moves to the post-career stage 6 and discovers the
  * standard shops. Shop, part and dealer-car gates then pass by the game's own
  * rules; nothing is copied from another player's save.
@@ -307,10 +307,104 @@
   }
 
   // ---------------------------------------------------------------------------
-  // UI: the 100% button runs this instead of copying a template save
+  // Built-in goals (js/career-data.js), used unless the player loads their own game data
   // ---------------------------------------------------------------------------
 
-  let db = null;
+  function builtinDatabase() {
+    const d = root.NFSU2CareerData;
+    if (!d) return null;
+    const events = new Map(d.events.map(([hash, stage, kind, special]) =>
+      [hash, { hash, name: `event 0x${hash.toString(16).toUpperCase()}`, stage, kind, special: special === 1 }]));
+    return {
+      events,
+      photos: d.photos.map(([hash, stage]) => ({ hash, stage })),
+      shops: d.shops.map(([hash, stage, gate, requirement, discovery]) =>
+        ({ hash, name: `shop 0x${hash.toString(16).toUpperCase()}`, stage, gate, requirement, discovery: discovery === 1 })),
+      parts: d.parts.map(([item, level, type, requirement]) => ({ item, level, type, requirement })),
+      carGates: d.carGates.map(([hash, a, b]) => ({ hash, events: [a, b] })),
+      stages: d.stages.map((finalEvent, id) => ({ id, finalEvent })),
+      cars: d.cars.map((hash, index) => ({ index, name: `car 0x${hash.toString(16).toUpperCase()}`, hash })),
+    };
+  }
+
+  // ---------------------------------------------------------------------------
+  // Everything unlocked: career, garage slots and every car's parts
+  // ---------------------------------------------------------------------------
+
+  const GDAT_BASE = 0x28;
+  const UNIQUES_REL = 0x2e8;
+  const OWNED_PERF_REL = 0x586;
+  /** The 54 active non-body performance part IDs (33 and 34 have names but no parts). */
+  const PERF_IDS = Array.from({ length: 56 }, (_, i) => i).filter((id) => id !== 33 && id !== 34);
+
+  /** Garage records with a bought car: career slots 1-5 and, when loaded, GARAGE.DAT slots 6-10. */
+  function garageRecords(save) {
+    const out = [];
+    if (!save.isGarageDatFile) {
+      for (let i = 0; i < GARAGE_SLOTS; i++) out.push({ bytes: save.workingBytes, base: GARAGE_BASE + i * GARAGE_STRIDE, number: i + 1 });
+    }
+    if (save.hasGarageDatLoaded()) {
+      for (let i = 0; i < GARAGE_SLOTS; i++) out.push({ bytes: save.garageDatWorking, base: GDAT_BASE + i * GARAGE_STRIDE, number: i + 6 });
+    }
+    return out;
+  }
+
+  /**
+   * Gives a bought garage car everything a finished career can give it: every visual part owned
+   * (so the garage's Body Parts Storage lists them all), every performance part owned, and the nine
+   * Outrun unique performance rewards. Installed parts are not changed.
+   */
+  function unlockCar(bytes, base) {
+    root.NFSU2Visual.ownAllParts(bytes, base);
+    for (const id of PERF_IDS) bytes[base + OWNED_PERF_REL + (id >> 3)] |= 1 << (id & 7);
+    for (let i = 0; i < 9; i++) view(bytes).setUint32(base + UNIQUES_REL + i * 4, 1, true);
+  }
+
+  /**
+   * The one-button unlock: completes the career (when a career save is loaded), opens all garage
+   * slots and unlocks every bought car. Throws before changing anything if the career cannot be
+   * completed. Returns a summary.
+   */
+  function unlockEverything(save, database) {
+    let completed = null;
+    if (!save.isGarageDatFile) {
+      completed = completeGame(save.workingBytes, database);
+      save.workingBytes.set(completed);
+    }
+    const records = garageRecords(save);
+    for (const r of records) r.bytes[r.base + SLOT_LOCK_REL] = 0;
+    const cars = records.filter((r) => r.bytes[r.base + SLOT_BOUGHT_REL] === 1);
+    for (const car of cars) unlockCar(car.bytes, car.base);
+    return { career: !!completed, slots: records.length, cars: cars.map((c) => c.number) };
+  }
+
+  /**
+   * nfsu2-web pairs GARAGE.DAT (slots 6-10) with its profile by a 64-bit FNV-1a fingerprint of the
+   * profile's car part, file offsets [36, 39266), stored at GARAGE.DAT +8. A garage whose fingerprint
+   * does not match is set aside as GARAGE.OLD and slots 6-10 are lost, so after editing the career
+   * save the fingerprint has to follow it (runtime/garage.c in th0mk/nfsu2-web).
+   */
+  const CARS_PART_START = 36;
+  const CARS_PART_LEN = 39230;
+
+  function garageFingerprint(career) {
+    let hash = 0xcbf29ce484222325n;
+    for (let i = CARS_PART_START; i < CARS_PART_START + CARS_PART_LEN; i++) {
+      hash = ((hash ^ BigInt(career[i])) * 0x100000001b3n) & 0xffffffffffffffffn;
+    }
+    return hash;
+  }
+
+  function syncGarageFingerprint(career, garage) {
+    if (!career || !garage || career.length < CARS_PART_START + CARS_PART_LEN || garage.length < 16) return;
+    view(garage).setBigUint64(8, garageFingerprint(career), true);
+  }
+
+  // ---------------------------------------------------------------------------
+  // UI
+  // ---------------------------------------------------------------------------
+
+  let db = builtinDatabase();
 
   function bridge() {
     return root.NFSU2Bridge || null;
@@ -321,37 +415,28 @@
     if (b) b.toast(message);
   }
 
-  function summary(report) {
-    const locked = [
-      ...report.shops.filter((s) => s.reason).map((s) => s.name),
-      ...report.parts.filter((p) => p.reason).map((p) => p.name),
-      ...report.cars.filter((c) => c.reason).map((c) => c.name),
-    ];
-    return `${report.percent.toFixed(1)}% · ${report.events}/${report.totalEvents} events · ${report.photos}/${report.totalPhotos} photos · ` +
-      `${report.stages}/${report.totalStages} stages · stage ${report.stage}` +
-      (locked.length ? ` · still locked: ${locked.length}` : ' · nothing locked');
+  function lockedCount(report) {
+    return [...report.shops, ...report.parts, ...report.cars].filter((x) => x.reason).length;
   }
 
-  async function onCompleteClick(e) {
-    e.preventDefault();
-    e.stopImmediatePropagation();
+  function onUnlockEverything() {
     const save = bridge()?.getSave();
-    if (!save) return;
-    if (save.isGarageDatFile) return toast('Load the career save (not GARAGE.DAT) to complete the game.');
-    if (!db) {
-      toast('Load your game data (GlobalB.lzc / GLOBALB.BUN) first: completion uses the game\'s own goals.');
-      root.NFSU2Visual?.pickGameData?.();
-      return;
-    }
+    if (!save) return toast('Load a save first.');
+    if (!db) return toast('Career data is missing (js/career-data.js).');
     try {
-      const done = completeGame(save.workingBytes, db);
-      save.workingBytes.set(done);
+      const result = unlockEverything(save, db);
       bridge().refresh();
-      const report = careerReport(save.workingBytes, db);
       renderStatus();
-      toast(`Career completed: ${summary(report)}`);
+      const parts = [];
+      if (result.career) {
+        const report = careerReport(save.workingBytes, db);
+        parts.push(`career ${report.percent.toFixed(0)}%${lockedCount(report) ? `, ${lockedCount(report)} gates still locked` : ''}`);
+      }
+      parts.push(`${result.slots} garage slots open`);
+      parts.push(result.cars.length ? `every part owned for car${result.cars.length > 1 ? 's' : ''} in slot ${result.cars.join(', ')}` : 'no cars in the garage yet');
+      toast(`Everything unlocked: ${parts.join(' · ')}. Download the save to use it.`);
     } catch (err) {
-      toast(`Completion failed (save unchanged): ${err.message}`);
+      toast(`Unlock failed (save unchanged): ${err.message}`);
     }
   }
 
@@ -362,40 +447,16 @@
     if (el) el.textContent = text;
   }
 
-  /** Replaces the overview's estimates with the game's own figures once game data is loaded. */
-  const GDAT_BASE = 0x28;
-
-  /** Garage records that hold a bought car: career slots 1-5 and, when loaded, GARAGE.DAT slots 6-10. */
-  function garageCars(save) {
-    const out = [];
-    const add = (bytes, base, number) => { if (bytes[base + SLOT_BOUGHT_REL] === 1) out.push({ bytes, base, number }); };
-    if (!save.isGarageDatFile) for (let i = 0; i < GARAGE_SLOTS; i++) add(save.workingBytes, GARAGE_BASE + i * GARAGE_STRIDE, i + 1);
-    if (save.hasGarageDatLoaded()) for (let i = 0; i < GARAGE_SLOTS; i++) add(save.garageDatWorking, GDAT_BASE + i * GARAGE_STRIDE, i + 6);
-    return out;
-  }
-
-  function onOwnAllClick() {
-    const save = bridge()?.getSave(), visual = root.NFSU2Visual;
-    if (!save || !visual) return;
-    const cars = garageCars(save);
-    if (!cars.length) return toast('No bought cars in the garage.');
-    for (const car of cars) visual.ownAllParts(car.bytes, car.base);
-    bridge().refresh();
-    toast(`Every part is now owned in Body Parts Storage for slot${cars.length > 1 ? 's' : ''} ${cars.map((c) => c.number).join(', ')}.`);
-  }
-
+  /** The overview's figures, from the game's own goals. */
   function renderStatus() {
     const save = bridge()?.getSave();
-    if (!db) { setText('careerStatus', 'Load your game data (GlobalB.lzc) to complete the career from its real goals.'); return; }
-    if (!save || save.isGarageDatFile) { setText('careerStatus', ''); return; }
+    if (!db || !save || save.isGarageDatFile) return;
     let report;
     try {
       report = careerReport(save.workingBytes, db);
-    } catch (err) {
-      setText('careerStatus', err.message);
+    } catch {
       return;
     }
-    setText('careerStatus', summary(report));
     setText('statCompletionPct', `${report.percent.toFixed(report.percent % 1 ? 1 : 0)}%`);
     setText('stageReadOnlyBadge', report.stage >= 6 ? 'COMPLETE' : `STAGE ${report.stage}`);
     setText('statStageName', STAGE_NAMES[report.stage] || `Stage ${report.stage}`);
@@ -405,15 +466,13 @@
   }
 
   function init() {
-    const button = document.getElementById('btnMasterUnlock100');
-    if (button) button.addEventListener('click', onCompleteClick, true);
-    document.getElementById('btnOwnAllParts')?.addEventListener('click', onOwnAllClick);
+    document.getElementById('btnUnlockEverything')?.addEventListener('click', onUnlockEverything);
+    // A player's own game data replaces the built-in goals (same tables, other builds).
     root.addEventListener('nfsu2:gamedata', (e) => {
       try {
         db = parseCareerDatabase(e.detail.bytes);
-      } catch (err) {
-        db = null;
-        toast(`Career data error: ${err.message}`);
+      } catch {
+        db = builtinDatabase();
       }
       renderStatus();
     });
@@ -422,7 +481,11 @@
     renderStatus();
   }
 
-  root.NFSU2Career = { parseCareerDatabase, careerReport, completeGame, stageResultCount, CURRENT_STAGE_OFF, SLOT_LOCK_REL };
+  root.NFSU2SyncGarageFingerprint = syncGarageFingerprint;
+  root.NFSU2Career = {
+    parseCareerDatabase, builtinDatabase, careerReport, completeGame, unlockEverything, unlockCar, garageFingerprint,
+    syncGarageFingerprint, stageResultCount, CURRENT_STAGE_OFF, SLOT_LOCK_REL,
+  };
 
   if (typeof document !== 'undefined') {
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);

@@ -11,7 +11,7 @@ Browser-based utility for editing **Need for Speed: Underground 2** career save 
 ## Features (v2.0)
 - **Profile, Cash & Native `.ZIP` Support:**
   - Rename your career profile (up to 7 ASCII characters) and edit your bank balance.
-  - Direct support for exported `.zip` save archives (switch between multiple profiles inside the archive and download a ready-to-restore `.zip`).
+  - Direct support for exported `.zip` save archives (switch between multiple profiles inside the archive and download a ready-to-restore `.zip`). The GARAGE.DAT fingerprint is updated with your edits, so nfsu2-web keeps slots 6–10.
 - **Career Garage (Slots 1–5) & GARAGE.DAT (Slots 6–10):**
   - Unlock all 5 career garage slots at any point in the game without affecting active map races.
   - Full support for external `GARAGE.DAT` files (Slots 6–10 used by `nfsu2.xyz` and Extra Options).
@@ -22,16 +22,10 @@ Browser-based utility for editing **Need for Speed: Underground 2** career save 
 - **40+ Built-in Car Presets:**
   - Story & Sponsor vehicles (*Rachel's 350Z*, *Caleb's GTO*, *Nikki's Mustang*, *Snoop Dogg's Escalade*, *Capone's H2*).
   - Custom Rivals, Player Builds, EU/US regional exclusives (*Peugeot 106*, *Opel Corsa*, *Honda Civic Si*, *Acura RSX*), and all 26 stock career cars.
-- **Career Unlocks & Templates:**
-  - **Starter 0% + Unlocked:** Load a clean 0% races save with $999,999, all 5 slots, Car Lot, shops, Stage 3, and 9 Uniques ready to go.
-  - **Safe Career Add-ons:** Unlock per-car part tables, Car Lot catalog tables, and hidden shop map icons without skipping active career races.
-  - **Complete Career (100%):** wins every career event and photo goal defined in your game data, completes all stages, discovers every shop and opens all 5 garage slots, so the game itself reports 100% with no shop, part or Car Lot gate left. Keeps your profile name, cash and garage cars; nothing is copied from another save. Needs `GLOBAL\GlobalB.lzc`.
-- **Visual Customisation (Rims, Spoilers, Paint & more):**
-  - Change body kits, spoilers, hoods, rims, spinners, paint (body, rims, calipers, spoiler…), vinyls, decals, window tint, neons, hydraulics and custom gauges for any garage car (Slots 1–10).
-  - Part lists come from your own game's `GLOBAL\GlobalB.lzc` (PC install/disc) or an unpacked `GLOBALB.BUN`, read locally and never uploaded, so only parts that fit the selected car are offered.
-  - **Own every part:** marks every rim, spoiler, body part, vinyl, decal and specialty as bought for a garage car (or all garage cars at once), so the garage's *Body Parts Storage* lists them all instead of showing padlocks. Writes only the game's ownership fields; no game data needed.
-- **Quick Race Custom Cars:**
-  - Lists the cars you built in *Quick Race → Customize* (stored separately from the career garage) and lets you edit their visuals in the same editor.
+- **Unlock Everything (one button):**
+  - Completes the career from the game's own goals (all 224 events, 30 photo goals, every stage), so the game itself shows 100%; every shop, shop part and Car Lot car is unlocked and every garage slot (1–10) is open.
+  - Every car in your garage owns every part (rims, spoilers, body kits, vinyls, decals, specialties, performance parts) and all 9 Outrun Uniques, so nothing is padlocked when you customise in the game's garage.
+  - Keeps your profile name, money and cars. Works without any game files.
 - **JSON Car Patches & Checksums:**
   - Export and import individual car builds as `.json` files.
   - Automatic header CRC-32 recalculation on save download.
@@ -58,7 +52,7 @@ Press `Win + R` and paste:
    - Download the latest `.zip` from [Releases](https://github.com/Starladdey/nfsu2-save-editor/releases) or clone this repository.
    - Open `index.html` in your browser to load and edit local save files.
    - *Tests:* `node --test tests/*.test.mjs` (no dependencies). Career tests also need the game data: `NFSU2_GAMEDATA=/path/to/GLOBAL/GlobalB.lzc node --test tests/*.test.mjs`.
-   - *Note:* To use the `Try Demo`, or `Starter 0%` buttons locally, run a local HTTP server in the project folder (for example, `npx serve` or `python -m http.server 8000`), as browsers block `fetch()` requests over `file://`.
+   - *Note:* To use the `Try Demo`, button locally, run a local HTTP server in the project folder (for example, `npx serve` or `python -m http.server 8000`), as browsers block `fetch()` requests over `file://`.
 
 ## Credits & Disclaimer
 - [NFSU2 Save File Technical Documentation](https://github.com/hackch/NFSU2-Savegame-Editor/blob/main/technical.md)
