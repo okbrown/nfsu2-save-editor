@@ -55,8 +55,14 @@
    * set bit 1327). Each rim model is in that group once per wheel class, and a car owns only the rims of
    * its own class (js/rim-data.js); owning rims of another class, or the DUMMY entry, padlocks the garage's
    * Rims category.
+   *
+   * The PC garage (SPEED2.EXE v1.2, 0x539C20) padlocks Rims when the career car's first owned-rims dword
+   * (car +0x5A0, bits 0-31) is non-zero: its loop meant to scan all 64 dwords re-tests the first one.
+   * So rims 0-31 of the list are left to the shops (where they are still free to fit) and every other rim
+   * of the car's class is owned.
    */
   const OWNED_RIMS_REL = 0x16c;
+  const GARAGE_RIM_BUG_BITS = 32;
 
   function rimBitsFor(car) {
     const data = root.NFSU2RimData;
@@ -573,7 +579,7 @@
     const rims = rimBitsFor(readCarHash(bytes, base));
     if (rims) {
       bytes.fill(0, sub + OWNED_RIMS_REL, sub + OWNED_RIMS_REL + 256);
-      for (const n of rims) bytes[sub + OWNED_RIMS_REL + (n >> 3)] |= 1 << (n & 7);
+      for (const n of rims) if (n >= GARAGE_RIM_BUG_BITS) bytes[sub + OWNED_RIMS_REL + (n >> 3)] |= 1 << (n & 7);
     }
     return bytes;
   }
@@ -582,7 +588,7 @@
     const sub = base + PURCHASED_REL;
     return OWNED_ITEMS.every((item) => bytes.subarray(sub + item * 4, sub + item * 4 + 4).every((b) => b === 0xff)) &&
       OWNED_AREAS.every(([off, len]) => bytes.subarray(sub + off, sub + off + len).every((b) => b === 0xff)) &&
-      (rimBitsFor(readCarHash(bytes, base)) || []).every((n) => (bytes[sub + OWNED_RIMS_REL + (n >> 3)] >> (n & 7)) & 1);
+      (rimBitsFor(readCarHash(bytes, base)) || []).every((n) => n < GARAGE_RIM_BUG_BITS || (bytes[sub + OWNED_RIMS_REL + (n >> 3)] >> (n & 7)) & 1);
   }
 
   // ---------------------------------------------------------------------------

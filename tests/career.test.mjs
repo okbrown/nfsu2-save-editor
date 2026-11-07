@@ -72,6 +72,7 @@ test('after owning every part, each bought-part index the game uses is set', { s
     for (const part of cat.options(car, slot)) {
       if (part.level === 0 || part.name === 'DUMMY') continue;
       if (slot === 29 && part.attributes.get(0xce7d8db5)?.[0] !== globalThis.NFSU2RimData.carClass[car]) continue;
+      if (slot === 29 && cat.options(car, slot).filter((p) => p.group === part.group).indexOf(part) < 32) continue;
       const n = cat.options(car, slot).filter((p) => p.group === part.group).indexOf(part);
       assert.ok((dv.getUint32(area + (n >> 5) * 4, true) >>> (n & 31)) & 1, `slot ${slot} ${part.name}`);
     }
@@ -120,16 +121,16 @@ test('the GARAGE.DAT fingerprint follows the edited career (nfsu2-web FNV-1a 64)
   assert.notEqual(new DataView(garage.buffer).getBigUint64(8, true), h, 'a car edit changes the fingerprint');
 });
 
-test('owned rims: every model in the car\'s own wheel sizes, as a real purchase writes them', () => {
+test('owned rims: the car\'s wheel sizes, minus the first 32 the PC garage cannot cope with', () => {
   const demo = save('DEMO'), base = 0x5870, sub = base + V.PURCHASED_REL, rims = sub + 0x16c;
   // DEMO slot 1 is a Corolla, wheel class 24 (16-18"), the same as the Civic that bought GRAVIS I.
   demo.fill(0xff, rims, rims + 256); // what the earlier editor wrote
   V.ownAllParts(demo, base);
   const bit = (n) => (demo[rims + (n >> 3)] >> (n & 7)) & 1;
   const owned = Array.from({ length: 2048 }, (_, n) => n).filter(bit);
-  assert.deepEqual(owned, globalThis.NFSU2RimData.bits[24]);
-  assert.equal(owned.length, 324);
-  assert.equal(bit(0), 0, 'DUMMY is not owned');
+  assert.deepEqual(owned, globalThis.NFSU2RimData.bits[24].filter((n) => n >= 32));
+  // SPEED2.EXE 0x539C20 padlocks the garage's Rims when the first owned-rims dword is non-zero.
+  assert.equal(new DataView(demo.buffer).getUint32(rims, true), 0);
   assert.equal(bit(1327), 1, 'GRAVIS I: the bit the PC game set when it was bought (purchased +0x211, 0x80)');
   assert.equal(globalThis.NFSU2RimData.carClass[V.gameHash('CIVIC')], 24);
 });
