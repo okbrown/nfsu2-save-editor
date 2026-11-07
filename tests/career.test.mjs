@@ -56,6 +56,25 @@ test('an already complete save is left byte-identical', { skip }, () => {
   assert.deepEqual(C.completeGame(jane, d), jane);
 });
 
+test('after owning every part, each bought-part index the game uses is set', { skip }, () => {
+  let bytes = new Uint8Array(readFileSync(gameData));
+  if (bytes[0] === 0x4a && bytes[1] === 0x44) bytes = V.decompressJdlz(bytes);
+  const cat = V.parseGameData(bytes), demo = save('DEMO'), base = 0x5870, sub = base + V.PURCHASED_REL, dv = new DataView(demo.buffer);
+  V.ownAllParts(demo, base);
+  const car = V.readCarHash(demo, base);
+  // Slot -> ownership field (serialized offset, bits): the special bitsets, else the career item's mask.
+  const special = { 7: 0x26c, 9: 0x298, 12: 0x27c, 29: 0x16c, 32: 0x28c, 162: 0x3b0 };
+  const item = { 1: 18, 2: 17, 6: 22, 11: 16, 14: 15, 15: 14, 16: 21, 34: 30, 153: 32, 154: 25, 155: 26, 156: 27, 157: 28, 159: 24, 160: 35, 161: 36, 163: 23 };
+  for (const slot of [...Object.keys(special), ...Object.keys(item)].map(Number)) {
+    const area = sub + (special[slot] ?? item[slot] * 4);
+    for (const part of cat.options(car, slot)) {
+      if (part.level === 0) continue;
+      const n = cat.options(car, slot).filter((p) => p.group === part.group).indexOf(part);
+      assert.ok((dv.getUint32(area + (n >> 5) * 4, true) >>> (n & 31)) & 1, `slot ${slot} ${part.name}`);
+    }
+  }
+});
+
 test('the bundle carries the save-safety patches', () => {
   const bundle = readFileSync(new URL('../js/app.bundle.min.js', import.meta.url), 'utf8');
   assert.match(bundle, /'STAGE':0xa175,/, 'stage display reads the real career stage');

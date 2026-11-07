@@ -28,6 +28,7 @@
   const GARAGE_STRIDE = 0x7f2;
   const GARAGE_SLOTS = 5;
   const SLOT_LOCK_REL = 0x428;
+  const SLOT_BOUGHT_REL = 0x429;
 
   const CAR_RECORD_STRIDE = 0x890;
   const CAR_HASH_REL = 0xd0;
@@ -362,6 +363,27 @@
   }
 
   /** Replaces the overview's estimates with the game's own figures once game data is loaded. */
+  const GDAT_BASE = 0x28;
+
+  /** Garage records that hold a bought car: career slots 1-5 and, when loaded, GARAGE.DAT slots 6-10. */
+  function garageCars(save) {
+    const out = [];
+    const add = (bytes, base, number) => { if (bytes[base + SLOT_BOUGHT_REL] === 1) out.push({ bytes, base, number }); };
+    if (!save.isGarageDatFile) for (let i = 0; i < GARAGE_SLOTS; i++) add(save.workingBytes, GARAGE_BASE + i * GARAGE_STRIDE, i + 1);
+    if (save.hasGarageDatLoaded()) for (let i = 0; i < GARAGE_SLOTS; i++) add(save.garageDatWorking, GDAT_BASE + i * GARAGE_STRIDE, i + 6);
+    return out;
+  }
+
+  function onOwnAllClick() {
+    const save = bridge()?.getSave(), visual = root.NFSU2Visual;
+    if (!save || !visual) return;
+    const cars = garageCars(save);
+    if (!cars.length) return toast('No bought cars in the garage.');
+    for (const car of cars) visual.ownAllParts(car.bytes, car.base);
+    bridge().refresh();
+    toast(`Every part is now owned in Body Parts Storage for slot${cars.length > 1 ? 's' : ''} ${cars.map((c) => c.number).join(', ')}.`);
+  }
+
   function renderStatus() {
     const save = bridge()?.getSave();
     if (!db) { setText('careerStatus', 'Load your game data (GlobalB.lzc) to complete the career from its real goals.'); return; }
@@ -385,6 +407,7 @@
   function init() {
     const button = document.getElementById('btnMasterUnlock100');
     if (button) button.addEventListener('click', onCompleteClick, true);
+    document.getElementById('btnOwnAllParts')?.addEventListener('click', onOwnAllClick);
     root.addEventListener('nfsu2:gamedata', (e) => {
       try {
         db = parseCareerDatabase(e.detail.bytes);

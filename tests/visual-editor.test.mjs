@@ -188,3 +188,20 @@ test('reset to stock restores parts, paint and aero flags inside the record only
   assert.deepEqual(V.readVisual(partial, GARAGE_BASE).map((v, i) => (i === 29 || i === 30 ? 0 : v)),
     V.readVisual(before, GARAGE_BASE).map((v, i) => (i === 29 || i === 30 ? 0 : v)));
 });
+
+test('owning every part fills only the Body Parts Storage ownership fields', () => {
+  const before = jane(), save = before.slice(), sub = GARAGE_BASE + V.PURCHASED_REL;
+  assert.ok(!V.ownsAllParts(save, GARAGE_BASE));
+  V.ownAllParts(save, GARAGE_BASE);
+  assert.ok(V.ownsAllParts(save, GARAGE_BASE));
+  const fields = [[14 * 4, 87 * 4], [0x16c, 0x16c + 256], [0x26c, 0x294], [0x298, 0x2a0], [0x3b0, 0x3c0]];
+  for (const i of changed(before, save)) {
+    assert.ok(fields.some(([a, b]) => i >= sub + a && i < sub + b), `unexpected change at 0x${i.toString(16)}`);
+  }
+  // Already-owned bits stay set; perf ownership (+0x15C) and the companion list are untouched.
+  for (let i = 0; i < before.length; i++) assert.equal(save[i] & before[i], before[i]);
+  assert.deepEqual(save.subarray(sub + 0x15c, sub + 0x16c), before.subarray(sub + 0x15c, sub + 0x16c));
+  const again = save.slice();
+  V.ownAllParts(again, GARAGE_BASE);
+  assert.deepEqual(again, save);
+});

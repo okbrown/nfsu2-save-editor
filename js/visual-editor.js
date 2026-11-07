@@ -45,6 +45,18 @@
    * and confirmed against the purchased rims in assets/JANE.
    */
   const OWNED_RIMS_REL = 0x596;
+  /** Garage records only: the purchased-parts subobject (Body Parts Storage) starts at base + 0x42A. */
+  const PURCHASED_REL = 0x42a;
+  /**
+   * Ownership fields of the purchased-parts subobject, as serialized offsets and byte lengths.
+   * Per-item 32-bit masks of owned variants for the career items the garage storage checks
+   * (PS2 0x27A630/0x27A720; items from the slot table filled at 0x272CF8), then the separate
+   * owned bitsets: rims (runtime +364), roof scoops (+620), spoilers (+636), wing mirrors (+652),
+   * hoods (+660, serialized +0x298) and NOS purge (+668, serialized +0x3B0). Checked against every
+   * part bought in assets/JANE. Body paint, vinyl layers and five accent paints are never tracked.
+   */
+  const OWNED_ITEMS = Array.from({ length: 73 }, (_, i) => i + 14).filter((item) => ![20, 71, 72, 73].includes(item));
+  const OWNED_AREAS = [[0x16c, 256], [0x26c, 16], [0x27c, 16], [0x28c, 8], [0x298, 8], [0x3b0, 16]];
   const OWNED_RIMS_BITS = 2048;
   const RIM_SLOT = 29;
 
@@ -573,6 +585,23 @@
     return bytes;
   }
 
+  /**
+   * Marks every part of every category as bought for this garage car, so the garage's Body Parts
+   * Storage lists them all. Touches only the ownership fields above; needs no game data.
+   */
+  function ownAllParts(bytes, base) {
+    const sub = base + PURCHASED_REL;
+    for (const item of OWNED_ITEMS) bytes.fill(0xff, sub + item * 4, sub + item * 4 + 4);
+    for (const [off, len] of OWNED_AREAS) bytes.fill(0xff, sub + off, sub + off + len);
+    return bytes;
+  }
+
+  function ownsAllParts(bytes, base) {
+    const sub = base + PURCHASED_REL;
+    return OWNED_ITEMS.every((item) => bytes.subarray(sub + item * 4, sub + item * 4 + 4).every((b) => b === 0xff)) &&
+      OWNED_AREAS.every(([off, len]) => bytes.subarray(sub + off, sub + off + len).every((b) => b === 0xff));
+  }
+
   // ---------------------------------------------------------------------------
   // UI
   // ---------------------------------------------------------------------------
@@ -730,6 +759,8 @@
       <div class="garage-mode-tabs ve-tabs" role="tablist">${tabs}</div>
       <div class="ve-body">${sections || '<p class="ve-empty">No editable parts for this car in this category.</p>'}</div>
       <div class="ve-foot">
+        ${state.garage ? `<button type="button" class="btn btn-secondary btn-sm" data-ve="own-all" ${ownsAllParts(state.draft, state.base) ? 'disabled' : ''}
+          title="Mark every rim, spoiler, body part, vinyl, decal and specialty as bought for this car, so the garage's Body Parts Storage lists them all">Own every part</button>` : ''}
         <button type="button" class="btn btn-ghost btn-sm" data-ve="reset-all" title="Every part, paint, vinyl, decal and specialty back to what the game gives a new car">Reset whole car to stock</button>
         <span class="ve-note">${dirty ? 'Unapplied changes' : 'No changes'}</span>
         <button type="button" class="btn btn-ghost btn-sm" data-ve="discard" ${dirty ? '' : 'disabled'}>Discard</button>
@@ -858,6 +889,9 @@
       case 'load-bun':
         if (await pickGameData()) renderDialog();
         return;
+      case 'own-all':
+        ownAllParts(state.draft, state.base);
+        return renderDialog();
       case 'reset-all':
         return resetDraft(undefined, 'Whole car');
       case 'unlock-rims':
@@ -976,7 +1010,7 @@
   }
 
   root.NFSU2Visual = {
-    gameHash, isNoneSlot, DEFAULT_VINYL_COLOURS, parseGameData, decompressJdlz, loadGameData, pickGameData, readVisual, rimBits, ownedRimCount, unlockAllRims,
+    gameHash, ownAllParts, ownsAllParts, PURCHASED_REL, isNoneSlot, DEFAULT_VINYL_COLOURS, parseGameData, decompressJdlz, loadGameData, pickGameData, readVisual, rimBits, ownedRimCount, unlockAllRims,
     OWNED_RIMS_REL, readCarHash, listCustomCars, customCarBase, colorPalettes,
     VisualCatalog, VISUAL_SLOTS, VISUAL_COUNT, VISUAL_REL, PERF_REL,
   };
