@@ -641,7 +641,6 @@
       root.dispatchEvent(new CustomEvent('nfsu2:gamedata', { detail: { bytes, name } }));
     }
     toast(`Loaded ${name}: ${catalog.parts.length.toLocaleString()} parts for ${catalog.cars.length} cars`);
-    renderCustomCars();
     return catalog;
   }
 
@@ -896,79 +895,17 @@
     });
   }
 
-  // --- Quick Race custom cars card ------------------------------------------
-
-  let customCard = null;
-
-  function ensureCustomCard() {
-    if (customCard) return customCard;
-    const garageCard = document.getElementById('garageSlotsContainer')?.closest('.card');
-    if (!garageCard) return null;
-    customCard = document.createElement('div');
-    customCard.className = 'card ve-custom-card';
-    customCard.innerHTML = `
-      <div class="card-header">
-        <div class="header-title-row">
-          <div>
-            <h2>Quick Race Custom Cars</h2>
-            <span class="subtitle-inline">The cars from Quick Race → Customize, stored separately from your career garage</span>
-          </div>
-        </div>
-        <button type="button" class="btn btn-secondary btn-sm" data-ve-load-bun>Load game data</button>
-      </div>
-      <div class="ve-custom-list"></div>`;
-    customCard.querySelector('[data-ve-load-bun]').addEventListener('click', pickGameData);
-    customCard.addEventListener('click', (e) => {
-      const btn = e.target.closest('[data-ve-custom]');
-      if (!btn) return;
-      const index = Number(btn.dataset.veCustom);
-      openEditor(`Custom Car ${index + 1}`, () => currentSave().workingBytes, customCarBase(index), false);
-    });
-    garageCard.after(customCard);
-    return customCard;
-  }
-
-  function renderCustomCars() {
-    const save = currentSave();
-    const card = ensureCustomCard();
-    if (!card) return;
-    const loadBtn = card.querySelector('[data-ve-load-bun]');
-    loadBtn.textContent = catalog ? `✓ ${catalogFile}` : 'Load game data';
-    const list = card.querySelector('.ve-custom-list');
-    if (!save || save.isGarageDatFile) {
-      card.hidden = !save ? true : false;
-      list.innerHTML = save ? '<p class="ve-empty">Custom cars live in the career save, not in GARAGE.DAT.</p>' : '';
-      return;
-    }
-    card.hidden = false;
-    const cars = listCustomCars(save.workingBytes);
-    list.innerHTML = cars.length ? cars.map((c) => `
-      <div class="slot-card status-in_use ve-custom-row">
-        <div class="slot-top-row">
-          <div class="slot-title-group">
-            <span class="slot-num">CUSTOM ${c.index + 1}</span>
-            <span class="slot-car-name">${escapeHtml(carLabel(c.car))}</span>
-          </div>
-          <button type="button" class="btn btn-xs btn-secondary" data-ve-custom="${c.index}">Visuals</button>
-        </div>
-      </div>`).join('')
-      : '<p class="ve-empty">This profile has no Quick Race custom cars yet. Create one in-game from Quick Race → Customize, then edit it here.</p>';
-  }
-
   function init() {
     const container = document.getElementById('garageSlotsContainer');
     if (!container || !bridge()) return;
-    new MutationObserver(() => {
-      decorateSlotCards(container);
-      renderCustomCars();
-    }).observe(container, { childList: true });
+    new MutationObserver(() => decorateSlotCards(container)).observe(container, { childList: true });
     decorateSlotCards(container);
-    renderCustomCars();
   }
 
   root.NFSU2Visual = {
     gameHash, ownAllParts, ownsAllParts, PURCHASED_REL, isNoneSlot, DEFAULT_VINYL_COLOURS, parseGameData, decompressJdlz,
-    loadGameData, pickGameData, readVisual, readCarHash, listCustomCars, customCarBase, colorPalettes,
+    loadGameData, pickGameData, openEditor, carLabel, hasGameData: () => !!catalog, gameDataName: () => catalogFile,
+    readVisual, readCarHash, listCustomCars, customCarBase, colorPalettes,
     VisualCatalog, VISUAL_SLOTS, VISUAL_COUNT, VISUAL_REL, PERF_REL,
   };
 
