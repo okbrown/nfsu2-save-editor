@@ -114,7 +114,7 @@
 
   /** Internal names of the stock cars, used for labels before GLOBALB.BUN is loaded. */
   const KNOWN_CARS = ['350Z', '240SX', '3000GT', 'A3', 'CELICA', 'COROLLA', 'CIVIC', 'ECLIPSE', 'FOCUS', 'G35',
-    'GOLF', 'GTO', 'HUMMER', 'IMPREZAWRX', 'IS300', 'LANCEREVO8', 'MUSTANGGT', 'NAVIGATOR', 'PEUGOT106', 'RSX',
+    'GOLF', 'GTO', 'HUMMER', 'IMPREZAWRX', 'IS300', 'LANCEREVO8', 'MUSTANGGT', 'NAVIGATOR', 'PEUGOT', 'PEUGOT106', 'RSX',
     'RX7', 'RX8', 'SENTRA', 'SKYLINE', 'ESCALADE', 'CORSA', 'TIBURON', 'TT', 'MIATA', 'SUPRA'];
   const KNOWN_CAR_NAMES = new Map(KNOWN_CARS.map((name) => [gameHash(name), name]));
 
