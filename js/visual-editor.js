@@ -51,12 +51,18 @@
   const OWNED_ITEMS = Array.from({ length: 73 }, (_, i) => i + 14).filter((item) => ![20, 71, 72, 73].includes(item));
   const OWNED_AREAS = [[0x26c, 16], [0x27c, 16], [0x28c, 8], [0x298, 8], [0x3b0, 16]];
   /**
-   * Owned rims: bit n is the n-th part of the shared rims group (0x83347C07, the same 1,453 entries for
-   * every career car). Entry 0 is the DUMMY placeholder; owning it, or a bit past the list's end, leaves
-   * the garage's Rims category padlocked. Confirmed by a purchase in the PC game: GRAVIS I set bit 1327.
+   * Owned rims: bit n is entry n of the shared rims group (confirmed by a purchase in the PC game: GRAVIS I
+   * set bit 1327). Each rim model is in that group once per wheel class, and a car owns only the rims of
+   * its own class (js/rim-data.js); owning rims of another class, or the DUMMY entry, padlocks the garage's
+   * Rims category.
    */
   const OWNED_RIMS_REL = 0x16c;
-  const RIM_GROUP_SIZE = 1453;
+
+  function rimBitsFor(car) {
+    const data = root.NFSU2RimData;
+    const cls = data && data.carClass[car];
+    return cls ? data.bits[cls] : null;
+  }
 
   function gameHash(name) {
     let hash = 0xffffffff;
@@ -564,8 +570,11 @@
     const sub = base + PURCHASED_REL;
     for (const item of OWNED_ITEMS) bytes.fill(0xff, sub + item * 4, sub + item * 4 + 4);
     for (const [off, len] of OWNED_AREAS) bytes.fill(0xff, sub + off, sub + off + len);
-    bytes.fill(0, sub + OWNED_RIMS_REL, sub + OWNED_RIMS_REL + 256);
-    for (let n = 1; n < RIM_GROUP_SIZE; n++) bytes[sub + OWNED_RIMS_REL + (n >> 3)] |= 1 << (n & 7);
+    const rims = rimBitsFor(readCarHash(bytes, base));
+    if (rims) {
+      bytes.fill(0, sub + OWNED_RIMS_REL, sub + OWNED_RIMS_REL + 256);
+      for (const n of rims) bytes[sub + OWNED_RIMS_REL + (n >> 3)] |= 1 << (n & 7);
+    }
     return bytes;
   }
 
@@ -573,7 +582,7 @@
     const sub = base + PURCHASED_REL;
     return OWNED_ITEMS.every((item) => bytes.subarray(sub + item * 4, sub + item * 4 + 4).every((b) => b === 0xff)) &&
       OWNED_AREAS.every(([off, len]) => bytes.subarray(sub + off, sub + off + len).every((b) => b === 0xff)) &&
-      Array.from({ length: RIM_GROUP_SIZE - 1 }, (_, i) => i + 1).every((n) => (bytes[sub + OWNED_RIMS_REL + (n >> 3)] >> (n & 7)) & 1);
+      (rimBitsFor(readCarHash(bytes, base)) || []).every((n) => (bytes[sub + OWNED_RIMS_REL + (n >> 3)] >> (n & 7)) & 1);
   }
 
   // ---------------------------------------------------------------------------

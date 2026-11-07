@@ -2,6 +2,7 @@
 import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
+require('../../js/rim-data.js');
 require('../../js/visual-editor.js');
 const V = globalThis.NFSU2Visual;
 

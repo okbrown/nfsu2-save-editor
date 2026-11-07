@@ -6,6 +6,7 @@ import { createRequire } from 'node:module';
 import { buildBun, CAR, PARTS } from './fixtures/bun.mjs';
 
 const require = createRequire(import.meta.url);
+require('../js/rim-data.js');
 require('../js/visual-editor.js');
 const V = globalThis.NFSU2Visual;
 const jane = () => new Uint8Array(readFileSync(new URL('../assets/JANE', import.meta.url)));
