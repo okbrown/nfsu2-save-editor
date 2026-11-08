@@ -8,12 +8,32 @@ Browser-based utility for editing **Need for Speed: Underground 2** career save 
 
 ![NFS Underground 2 Save Editor preview](assets/web.png)
 
-## Features (v2.0)
+## What's New in v3.0
+
+**New**
+- **Unlock Everything** — one button for a fully unlocked game: 100% career from the game's own goals, every shop part and Car Lot car, all garage slots, and every part owned on every garage car so nothing is padlocked in *My Garage*. No game files needed.
+- **Visual customisation** for every garage and custom car: body kits, spoilers, rims (by brand, model and size), paint, vinyls (by category), decals, tint, neons, specialties and gauges, with *Reset to stock* per section, per tab or for the whole car.
+- **Quick Race custom cars** can be added, changed, tuned and deleted like garage cars.
+- **Built-in parts list**, so the Visuals menus work without the game's `GLOBALB.BUN` (your own file can still be loaded for modded games).
+- **Real career figures** in the overview (completion %, stage, events, shops, Car Lot) instead of estimates.
+
+**Fixed**
+- The old *100% Sandbox* copied the bundled demo save (`JANE`) over yours, including its races, messages and custom cars. It is replaced by *Unlock Everything*.
+- Unlocking slots, injecting cars and *Enable All 5 Slots* raised the **career stage** (offset `0xA175`), skipping stages and stranding their races; the stage is no longer touched by slot edits.
+- The stage display read bytes from garage slot 4 instead of the real career stage.
+- Unlocking a slot copied slot 1's window tint, neons, bulbs and hydraulics into it and wrote invalid neon/bulb values; injected presets kept the previous car's vinyls, decals and neons. Stock values are used instead.
+- Cars without tint/neon data were shown as *Locked*.
+- Choosing a performance tier also overwrote 420 bytes of the car's purchased parts and an unverified table at `0xC45B`; it now sets only the performance parts.
+- Edited nfsu2-web backups lost slots 6–10: the `GARAGE.DAT` fingerprint is now updated with your edits.
+- *My Garage* kept **Rims** padlocked when a car owned rims at the start of the game's list, because of a bug in the game itself (`SPEED2.EXE` 0x539C20 tests only the first word of the owned-rims set); owned rims now avoid that range.
+- After an update the page could run old cached scripts with new ones; the offline cache is now network-first and every script is versioned.
+
+## Features (v3.0)
 - **Profile, Cash & Native `.ZIP` Support:**
   - Rename your career profile (up to 7 ASCII characters) and edit your bank balance.
   - Direct support for exported `.zip` save archives (switch between multiple profiles inside the archive and download a ready-to-restore `.zip`). The GARAGE.DAT fingerprint is updated with your edits, so nfsu2-web keeps slots 6–10.
 - **Career Garage (Slots 1–5) & GARAGE.DAT (Slots 6–10):**
-  - Unlock all 5 career garage slots at any point in the game without affecting active map races.
+  - Unlock all 5 career garage slots at any point in the game without changing your career stage or active map races.
   - Full support for external `GARAGE.DAT` files (Slots 6–10 used by `nfsu2.xyz` and Extra Options).
 - **Performance, Outrun Uniques & Dyno:**
   - Switch any car between *Stock*, *Street (Lvl 1)*, *Pro (Lvl 2)*, and *Extreme (Lvl 3)* tuning levels.
@@ -58,7 +78,10 @@ Press `Win + R` and paste:
    - Open `index.html` in your browser to load and edit local save files.
    - *Tests:* `node --test tests/*.test.mjs` (no dependencies). Career tests also need the game data: `NFSU2_GAMEDATA=/path/to/GLOBAL/GlobalB.lzc node --test tests/*.test.mjs`.
    - *Built-in game tables:* `js/parts-data.js` is generated with `node tools/build-parts-data.mjs /path/to/GLOBAL/GlobalB.lzc`.
-   - *Note:* To use the `Try Demo`, button locally, run a local HTTP server in the project folder (for example, `npx serve` or `python -m http.server 8000`), as browsers block `fetch()` requests over `file://`.
+   - *Note:* To use the `Try Demo` button locally, run a local HTTP server in the project folder (for example, `npx serve` or `python -m http.server 8000`), as browsers block `fetch()` requests over `file://`.
+
+## Deploying
+The site is plain static files with no build step. `wrangler.jsonc` publishes it as a Cloudflare Workers static site (`npx wrangler deploy`, or connect the repository in the Cloudflare dashboard with an empty build command); `.assetsignore` keeps `tests/`, `tools/` and this README off the site. Any static host works the same way.
 
 ## Credits & Disclaimer
 - [NFSU2 Save File Technical Documentation](https://github.com/hackch/NFSU2-Savegame-Editor/blob/main/technical.md)
