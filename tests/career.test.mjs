@@ -135,6 +135,23 @@ test('owned rims: the car\'s wheel sizes, minus the first 32 the PC garage canno
   assert.equal(globalThis.NFSU2RimData.carClass[V.gameHash('CIVIC')], 24);
 });
 
+test('menus name every choice: rims by brand as model and size, only the car\'s sizes, no duplicates', { skip }, () => {
+  let bytes = new Uint8Array(readFileSync(gameData));
+  if (bytes[0] === 0x4a && bytes[1] === 0x44) bytes = V.decompressJdlz(bytes);
+  const cat = V.parseGameData(bytes), civic = V.gameHash('CIVIC');
+  const rims = V.menuChoices(civic, 29, 0, cat);
+  const aftermarket = rims.filter((e) => e.part.level > 0);
+  assert.equal(aftermarket.length, 324, 'every rim in the Civic\'s 16-18" sizes');
+  assert.ok(aftermarket.every((e) => /— 1[678]"$/.test(e.label) && e.group && e.group !== 'Other'));
+  assert.ok(aftermarket.some((e) => e.group === '5ZIGEN' && e.label === 'GRAVIS I — 18"'));
+  for (const slot of [12, 7, 29, 64, 105]) {
+    const keys = V.menuChoices(civic, slot, 0, cat).map((e) => `${e.group}|${e.label}`);
+    assert.equal(new Set(keys).size, keys.length, `slot ${slot} has duplicate entries`);
+  }
+  assert.ok(V.menuChoices(civic, 12, 0, cat).some((e) => e.label === 'JORGEN (Carbon)'));
+  assert.ok(V.menuChoices(civic, 64, 0, cat).every((e) => e.group));
+});
+
 test('the bundle carries the save-safety patches', () => {
   const bundle = readFileSync(new URL('../js/app.bundle.min.js', import.meta.url), 'utf8');
   assert.match(bundle, /'STAGE':0xa175,/, 'stage display reads the real career stage');

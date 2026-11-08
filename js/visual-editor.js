@@ -393,6 +393,7 @@
       this.carNames = new Map(cars.map((c) => [c.hash, c.name]));
       this.stockPaints = new Map(cars.map((c) => [c.hash, c.stockPaint]));
       this.optionCache = new Map();
+      this.partCache = new Map();
     }
 
     carName(car) {
@@ -427,7 +428,16 @@
     }
 
     part(car, slot, hash) {
-      return this.options(car, slot).find((p) => p.hash === hash);
+      const key = `${car}:${slot}`;
+      let byHash = this.partCache.get(key);
+      if (!byHash) this.partCache.set(key, (byHash = new Map(this.options(car, slot).map((p) => [p.hash, p]))));
+      return byHash.get(hash);
+    }
+
+    /** Rim brand names: the parts of type 67 (the rim shop's brand list), keyed by the rims' brand attribute. */
+    brandName(key) {
+      if (!this.brands) this.brands = new Map(this.parts.filter((p) => p.type === 67).map((p) => [p.hash, p.name]));
+      return this.brands.get(key);
     }
 
     /**
@@ -630,9 +640,58 @@
     return part.name.startsWith(prefix) ? part.name.slice(prefix.length) : part.name;
   }
 
+  /** Vinyl categories by part variant, as SPEED2.EXE's vinyl menu pairs them (0x546030). */
+  const VINYL_CATEGORIES = {
+    0: 'Tear', 1: 'Tear sets', 2: 'Stripes', 3: 'Stripe sets', 4: 'Splash', 5: 'Splash sets', 6: 'Modern', 7: 'Modern sets',
+    8: 'Flames', 9: 'Flame sets', 10: 'Lightning', 11: 'Lightning sets', 12: 'Racing', 13: 'Racing sets', 14: 'Flags',
+    15: 'Flag sets', 16: 'Tribal', 17: 'Tribal sets', 18: 'Wild', 19: 'Wild sets', 20: 'Hoods', 21: 'Aftermarket',
+    22: 'Manufacturer', 23: 'Body', 24: 'Unique', 25: 'Top layer', 26: 'Art Factory', 27: 'Contest',
+  };
+  const RIM_SIZE = 0xeb0101e2;
+  const RIM_CLASS = 0xce7d8db5;
+  const RIM_BRAND = 0xebb03e66;
+
+  /**
+   * A slot's choices as menu entries {part, label, group}: rims by brand as "model — size" (only the
+   * sizes that fit the car, as the rim shop lists them), vinyls by category, carbon versions marked,
+   * and any name still repeated within a group numbered.
+   */
+  function choices(car, slot, current, cat = catalog) {
+    let parts = cat.selectableOptions(car, slot);
+    const carClass = root.NFSU2RimData?.carClass[car];
+    if (slot === 29 && carClass) {
+      parts = parts.filter((p) => p.level === 0 || p.hash === current || p.attributes.get(RIM_CLASS)?.[0] === carClass);
+    }
+    const entries = parts.map((part) => {
+      let label = partLabel(part, car), group = '';
+      if (slot === 29 && part.level > 0) {
+        const size = part.attributes.get(RIM_SIZE)?.[0];
+        group = cat.brandName(part.attributes.get(RIM_BRAND)?.[0]) || 'Other';
+        if (size) label += ` — ${size}"`;
+      } else if (slot >= 64 && slot <= 67) {
+        group = VINYL_CATEGORIES[part.variant] || 'Other';
+      }
+      if (cat.attribute(part, 'CARBONFIBRE')) label += ' (Carbon)';
+      return { part, label, group };
+    });
+    const seen = new Map();
+    for (const e of entries) {
+      const key = `${e.group}\u0000${e.label}`, n = (seen.get(key) || 0) + 1;
+      seen.set(key, n);
+      if (n > 1) e.label += ` #${n}`;
+    }
+    if (slot === 29 || (slot >= 64 && slot <= 67)) {
+      entries.sort((a, b) => (a.group === b.group ? 0 : !a.group ? -1 : !b.group ? 1 : a.group.localeCompare(b.group)));
+    }
+    return entries;
+  }
+
+  const PICKER_MIN = 25; // longer lists open as a searchable picker instead of a <select>
+
   /** Parses GLOBALB.BUN bytes and makes them the active part catalogue. */
-  function loadGameData(input, name) {
+  function loadGameData(input, name, { quiet = false, remember = false } = {}) {
     let bytes = input instanceof Uint8Array ? input : new Uint8Array(input);
+    const original = bytes;
     if (isJdlz(bytes)) bytes = decompressJdlz(bytes);
     catalog = parseGameData(bytes);
     catalogFile = name;
@@ -640,8 +699,39 @@
     if (typeof root.dispatchEvent === 'function' && typeof CustomEvent === 'function') {
       root.dispatchEvent(new CustomEvent('nfsu2:gamedata', { detail: { bytes, name } }));
     }
-    toast(`Loaded ${name}: ${catalog.parts.length.toLocaleString()} parts for ${catalog.cars.length} cars`);
+    if (remember) rememberGameData(original, name);
+    if (!quiet) toast(`Loaded ${name}: ${catalog.parts.length.toLocaleString()} parts for ${catalog.cars.length} cars (remembered for next time)`);
     return catalog;
+  }
+
+  // The game data the player picked is kept in this browser (IndexedDB), so it is loaded once, not per visit.
+  const STORE_DB = 'nfsu2-save-editor', STORE = 'gamedata';
+
+  function withStore(mode, fn) {
+    return new Promise((resolve, reject) => {
+      if (typeof indexedDB === 'undefined') return reject(new Error('no IndexedDB'));
+      const open = indexedDB.open(STORE_DB, 1);
+      open.onupgradeneeded = () => open.result.createObjectStore(STORE);
+      open.onerror = () => reject(open.error);
+      open.onsuccess = () => {
+        const db = open.result, tx = db.transaction(STORE, mode), req = fn(tx.objectStore(STORE));
+        tx.oncomplete = () => { db.close(); resolve(req && req.result); };
+        tx.onerror = () => { db.close(); reject(tx.error); };
+      };
+    });
+  }
+
+  function rememberGameData(bytes, name) {
+    withStore('readwrite', (store) => store.put({ bytes, name }, 'globalb')).catch(() => {});
+  }
+
+  async function restoreGameData() {
+    try {
+      const saved = await withStore('readonly', (store) => store.get('globalb'));
+      if (saved && saved.bytes && !catalog) loadGameData(saved.bytes, saved.name, { quiet: true });
+    } catch {
+      // Private window or storage blocked: the player can still load the file by hand.
+    }
   }
 
   /** Picks the GLOBALB.BUN via a hidden file input; resolves once parsed. */
@@ -654,7 +744,7 @@
         const file = input.files && input.files[0];
         if (!file) return resolve(false);
         try {
-          loadGameData(await file.arrayBuffer(), file.name);
+          loadGameData(await file.arrayBuffer(), file.name, { remember: true });
           resolve(true);
         } catch (err) {
           toast(`Game data error: ${err.message}`);
@@ -668,7 +758,7 @@
   // --- Dialog ---------------------------------------------------------------
 
   let dialog = null;
-  let state = null; // { title, getBytes, base, length, garage, draft (copy), tab, openPalette }
+  let state = null; // { title, getBytes, base, length, garage, draft (copy), tab, open }
 
   function ensureDialog() {
     if (dialog) return dialog;
@@ -678,6 +768,20 @@
     dialog.addEventListener('close', () => { state = null; });
     dialog.addEventListener('click', onDialogClick);
     dialog.addEventListener('change', onDialogChange);
+    dialog.addEventListener('input', (e) => {
+      if (!e.target.matches('[data-ve-search]')) return;
+      const q = e.target.value.trim().toLowerCase(), picker = e.target.closest('.ve-picker');
+      for (const g of picker.querySelectorAll('.ve-pick-group')) {
+        const groupName = (g.querySelector('.ve-palette-name')?.textContent || '').toLowerCase();
+        let shown = 0;
+        for (const b of g.querySelectorAll('.ve-pick')) {
+          const hit = !q || b.textContent.toLowerCase().includes(q) || groupName.includes(q);
+          b.hidden = !hit;
+          if (hit) shown++;
+        }
+        g.hidden = !shown;
+      }
+    });
     document.body.appendChild(dialog);
     return dialog;
   }
@@ -692,7 +796,7 @@
   function openEditor(title, getBytes, base, garage) {
     const bytes = getBytes();
     const length = garage ? GARAGE_RECORD_LEN : CUSTOM_RECORD_LEN;
-    state = { title, getBytes, base, length, garage, draft: bytes.slice(), tab: 'BODY', openPalette: null };
+    state = { title, getBytes, base, length, garage, draft: bytes.slice(), tab: 'BODY', open: null };
     ensureDialog();
     renderDialog();
     if (!dialog.open) dialog.showModal();
@@ -766,7 +870,7 @@
       const swatch = installed && installed.color ? installed.color : 'transparent';
       const name = (current === 0 ? 'None' : installed ? installed.name : `Unknown ${hex8(current)}`) +
         (current === stock ? ` (${stockTag})` : '');
-      const open = state.openPalette === slot.id;
+      const open = state.open === slot.id;
       const stockPart = stock ? options.find((p) => p.hash === stock) : null;
       const quick = !open ? '' : `
         <div class="ve-palette"><span class="ve-palette-name">Quick</span><div class="ve-swatches">
@@ -790,25 +894,59 @@
           ${open ? `<div class="ve-palettes">${palettes}</div>` : ''}
         </div>`;
     }
+    const entries = choices(car, slot.id, current);
+    const stockEntry = entries.find((e) => e.part.hash === stock);
+    const ordered = stockEntry ? [stockEntry, ...entries.filter((e) => e !== stockEntry)] : entries;
+    const labelOf = (hash) => hash === 0 ? '— None —'
+      : (entries.find((e) => e.part.hash === hash)?.label || (installed ? installed.name : 'Unknown ' + hex8(hash)));
+    const tag = (hash) => (hash === stock ? ` (${stockTag})` : '');
+    const rowLabel = `<span class="ve-label">${escapeHtml(slot.label)}${hidden ? ' <em>(hidden by kit)</em>' : ''}</span>`;
+    if (ordered.length >= PICKER_MIN) {
+      const open = state.open === slot.id;
+      const group = (name, items) => `<div class="ve-pick-group">${name ? `<span class="ve-palette-name">${escapeHtml(name)}</span>` : ''}
+        <div class="ve-pick-items">${items.map((e) => `<button type="button" class="ve-pick ${e.part.hash === current ? 'selected' : ''}"
+          data-ve-pick="${slot.id}" data-hash="${e.part.hash}">${escapeHtml(e.label)}${tag(e.part.hash)}</button>`).join('')}</div></div>`;
+      let panel = '';
+      if (open) {
+        const groups = new Map();
+        for (const e of ordered) (groups.get(e.group) || groups.set(e.group, []).get(e.group)).push(e);
+        const none = isNoneSlot(slot.id) ? group('', [{ part: { hash: 0 }, label: '— None —' }]) : '';
+        panel = `<div class="ve-picker">
+          <input type="search" class="ve-search" data-ve-search placeholder="Search ${ordered.length} ${escapeHtml(slot.label.toLowerCase())}…" aria-label="Search">
+          <div class="ve-pick-list">${none}${[...groups].map(([name, items]) => group(name, items)).join('')}</div></div>`;
+      }
+      return `
+        <div class="ve-row ${hidden ? 'is-hidden' : ''}">
+          ${rowLabel}
+          <button type="button" class="ve-color-btn" data-ve-palette="${slot.id}" ${hidden ? 'disabled' : ''} aria-expanded="${open}">
+            <span class="ve-color-name">${escapeHtml(labelOf(current))}${tag(current)}</span><span class="ve-caret">▾</span>
+          </button>
+          ${panel}
+        </div>`;
+    }
     const opts = [];
-    if (isNoneSlot(slot.id)) {
-      opts.push(`<option value="0" ${current === 0 ? 'selected' : ''}>— None —${stock === 0 ? ` (${stockTag})` : ''}</option>`);
-    } else if (current === 0) {
-      opts.push('<option value="0" selected disabled>— Empty (not a game value) —</option>');
+    if (isNoneSlot(slot.id)) opts.push(`<option value="0" ${current === 0 ? 'selected' : ''}>— None —${tag(0)}</option>`);
+    else if (current === 0) opts.push('<option value="0" selected disabled>— Empty (not a game value) —</option>');
+    if (current !== 0 && !ordered.some((e) => e.part.hash === current)) {
+      opts.push(`<option value="${current}" selected>${escapeHtml(labelOf(current))}</option>`);
     }
-    if (current !== 0 && !known) {
-      opts.push(`<option value="${current}" selected>${escapeHtml(installed ? installed.name : 'Unknown ' + hex8(current))}</option>`);
-    }
-    // The stock part first, then the rest in catalogue order.
-    const ordered = [...options.filter((p) => p.hash === stock), ...options.filter((p) => p.hash !== stock)];
-    for (const p of ordered) {
-      opts.push(`<option value="${p.hash}" ${p.hash === current ? 'selected' : ''}>${escapeHtml(partLabel(p, car))}${p.hash === stock ? ` (${stockTag})` : ''}</option>`);
+    for (const e of ordered) {
+      opts.push(`<option value="${e.part.hash}" ${e.part.hash === current ? 'selected' : ''}>${escapeHtml(e.label)}${tag(e.part.hash)}</option>`);
     }
     return `
       <label class="ve-row ${hidden ? 'is-hidden' : ''}">
-        <span class="ve-label">${escapeHtml(slot.label)}${hidden ? ' <em>(hidden by kit)</em>' : ''}</span>
+        ${rowLabel}
         <select data-ve-slot="${slot.id}" ${hidden ? 'disabled' : ''}>${opts.join('')}</select>
       </label>`;
+  }
+
+  function setDraft(slot, hash) {
+    try {
+      catalog.edit(state.draft, state.base, slot, hash);
+    } catch (err) {
+      toast(err.message);
+    }
+    renderDialog();
   }
 
   function resetDraft(slots, label) {
@@ -832,15 +970,21 @@
     if (!el) return;
     if (el.dataset.veTab) {
       state.tab = el.dataset.veTab;
-      state.openPalette = null;
+      state.open = null;
       return renderDialog();
     }
     if (el.dataset.vePalette) {
       const id = Number(el.dataset.vePalette);
-      state.openPalette = state.openPalette === id ? null : id;
-      return renderDialog();
+      state.open = state.open === id ? null : id;
+      renderDialog();
+      dialog.querySelector('[data-ve-search]')?.focus();
+      return;
     }
-    if (el.dataset.vePick) return setDraft(Number(el.dataset.vePick), Number(el.dataset.hash) >>> 0);
+    if (el.dataset.vePick) {
+      const slot = Number(el.dataset.vePick);
+      if (!isColorSlot(slot)) state.open = null;
+      return setDraft(slot, Number(el.dataset.hash) >>> 0);
+    }
     if (el.dataset.veReset) {
       const slots = VISUAL_SLOTS.filter((s) => s.tab === state.tab && s.category === el.dataset.veReset).map((s) => s.id);
       return resetDraft(slots, el.dataset.veReset);
@@ -900,11 +1044,12 @@
     if (!container || !bridge()) return;
     new MutationObserver(() => decorateSlotCards(container)).observe(container, { childList: true });
     decorateSlotCards(container);
+    restoreGameData();
   }
 
   root.NFSU2Visual = {
     gameHash, ownAllParts, ownsAllParts, PURCHASED_REL, isNoneSlot, DEFAULT_VINYL_COLOURS, parseGameData, decompressJdlz,
-    loadGameData, pickGameData, openEditor, carLabel, hasGameData: () => !!catalog, gameDataName: () => catalogFile,
+    loadGameData, pickGameData, openEditor, menuChoices: choices, carLabel, hasGameData: () => !!catalog, gameDataName: () => catalogFile,
     readVisual, readCarHash, listCustomCars, customCarBase, colorPalettes,
     VisualCatalog, VISUAL_SLOTS, VISUAL_COUNT, VISUAL_REL, PERF_REL,
   };
