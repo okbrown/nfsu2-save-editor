@@ -8,7 +8,7 @@ This is a fork of [Starladdey/nfsu2-save-editor](https://github.com/Starladdey/n
 The original repository ships its app only as a minified bundle, so the new features live in separate, readable modules (`js/visual-editor.js`, `js/career.js`, `js/custom-cars.js` and their data files) with small, documented patches to `js/app.bundle.min.js`. I plan to contact the original author to offer these changes for merging upstream and to ask about the unminified source, so they can be folded into it properly. Until then, the live site above runs the original version.
 
 ## Web Version
-- **Live Editor:** [nfsu2.divon.eu](https://nfsu2.divon.eu/)
+- **Original Live Editor:** [nfsu2.divon.eu](https://nfsu2.divon.eu/) — the original, upstream version by Starladdey (without this fork's v3.0 changes).
 - **Guides & Documentation:** [nfsu2.divon.eu/guides/](https://nfsu2.divon.eu/guides/)
 
 ![NFS Underground 2 Save Editor preview](assets/web.png)
