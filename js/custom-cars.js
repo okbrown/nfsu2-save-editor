@@ -234,7 +234,15 @@
       return;
     }
     c.hidden = false;
-    const b = bridge(), recs = records(s.workingBytes), listed = recs.filter((r) => r.listed);
+    const b = bridge();
+    if (!b.presets || !b.perfTiers || !b.dynoPresets || !b.uniques) {
+      // Scripts from two editor versions (an old cached bundle): nothing here can work until a reload.
+      add.innerHTML = '<option value="">Reload the page to use custom cars</option>';
+      add.disabled = true;
+      list.innerHTML = '<p class="ve-empty">The editor was updated while this page was open. Reload the page (Ctrl+Shift+R) to edit custom cars.</p>';
+      return;
+    }
+    const recs = records(s.workingBytes), listed = recs.filter((r) => r.listed);
     const free = recs.find((r) => !r.listed);
     add.innerHTML = carOptions(s, free ? '+ Add a custom car…' : 'All 20 custom car slots are used');
     add.disabled = !free;

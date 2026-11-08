@@ -1,19 +1,21 @@
 // NFSU2 Save Editor — service worker
-// Bump CACHE_NAME when you want to force-clear old caches on all clients.
-const CACHE_NAME = 'nfsu2-save-editor-v8';
+// ASSET_VERSION must match the ?v= on index.html's scripts and stylesheets, so a page never runs
+// one version's scripts with another's: the editor's modules depend on each other.
+const ASSET_VERSION = '9';
+const CACHE_NAME = 'nfsu2-save-editor-v' + ASSET_VERSION;
 
 const PRECACHE = [
   '/',
   '/index.html',
-  '/css/style.css',
+  '/css/style.css?v=' + ASSET_VERSION,
   '/css/landing.css',
-  '/css/visual-editor.css',
-  '/js/app.bundle.min.js',
-  '/js/rim-data.js',
-  '/js/visual-editor.js',
-  '/js/career-data.js',
-  '/js/career.js',
-  '/js/custom-cars.js',
+  '/css/visual-editor.css?v=' + ASSET_VERSION,
+  '/js/app.bundle.min.js?v=' + ASSET_VERSION,
+  '/js/rim-data.js?v=' + ASSET_VERSION,
+  '/js/visual-editor.js?v=' + ASSET_VERSION,
+  '/js/career-data.js?v=' + ASSET_VERSION,
+  '/js/career.js?v=' + ASSET_VERSION,
+  '/js/custom-cars.js?v=' + ASSET_VERSION,
   '/assets/DEMO',
   '/assets/JANE',
   '/assets/favicon.svg',
@@ -55,21 +57,11 @@ self.addEventListener('fetch', (e) => {
   if (req.method !== 'GET') return;
   if (new URL(req.url).origin !== self.location.origin) return;
 
-  // Pages: network first (so deploys show up immediately), cache as offline fallback
-  if (req.mode === 'navigate') {
-    e.respondWith(
-      fetch(req)
-        .then((res) => putInCache(req, res))
-        .catch(() => caches.match(req).then((hit) => hit || caches.match('/')))
-    );
-    return;
-  }
-
-  // Everything else (CSS, JS, images, demo saves): serve from cache, refresh in background
+  // Network first for everything, so an update is never mixed with cached files; the cache is the
+  // offline fallback.
   e.respondWith(
-    caches.match(req).then((cached) => {
-      const network = fetch(req).then((res) => putInCache(req, res)).catch(() => cached);
-      return cached || network;
-    })
+    fetch(req)
+      .then((res) => putInCache(req, res))
+      .catch(() => caches.match(req).then((hit) => hit || (req.mode === 'navigate' ? caches.match('/') : undefined)))
   );
 });

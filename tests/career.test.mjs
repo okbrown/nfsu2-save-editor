@@ -141,6 +141,19 @@ test('the bundle carries the save-safety patches', () => {
   assert.match(bundle, /\(_0x569c05=0x1\)\{return;/, 'slot edits never raise the career stage');
   assert.doesNotMatch(bundle, /<0x5&&\(this\['workingBytes'\]\[_0x376147/, '"Enable All 5 Slots" does not set stage 5');
   assert.match(bundle, /'DEFAULT_USED_SLOT_HEADER_HEX':'38 39 26 3D 3E 96 AC A5/, 'stock tint/neon defaults');
-  assert.match(bundle, /globalThis\.NFSU2Bridge=/, 'bridge for js/visual-editor.js and js/career.js');
+  assert.match(bundle, /globalThis\.NFSU2Bridge=\{[^}]*presets:_0x253ee1,perfTiers:_0x176344,dynoPresets:_0x40d7f4,uniques:_0x3ede76\}/, 'bridge for js/visual-editor.js, js/career.js and js/custom-cars.js');
   assert.match(bundle, /globalThis\.NFSU2SyncGarageFingerprint\(this\['workingBytes'\]/, 'GARAGE.DAT fingerprint refreshed on export');
+});
+
+test('the page loads one version of every editor script and stylesheet (no stale cached mix)', () => {
+  const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+  const sw = readFileSync(new URL('../sw.js', import.meta.url), 'utf8');
+  const version = /ASSET_VERSION = '([^']+)'/.exec(sw)[1];
+  const assets = [...html.matchAll(/(?:src|href)="((?:js|css)\/[^"]+)"/g)].map((m) => m[1]).filter((a) => !a.includes('landing'));
+  assert.ok(assets.length >= 8);
+  for (const a of assets) {
+    assert.ok(a.endsWith(`?v=${version}`), `${a} must carry ?v=${version}`);
+    assert.ok(sw.includes(`'/${a.split('?')[0]}?v=' + ASSET_VERSION`), `${a} must be precached with the same version`);
+  }
+  assert.doesNotMatch(sw, /caches\.match\(req\)\.then\(\(cached\) => \{[^}]*return cached \|\| network/, 'scripts are not served cache-first');
 });
