@@ -1,0 +1,12 @@
+// Cloudflare Workers static site: the editor is plain HTML, CSS and JavaScript, so there is no build step.
+// Deploy: npx wrangler deploy
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "nfsu2",
+  "compatibility_date": "2026-10-01",
+  "assets": {
+    "directory": "./",
+    "html_handling": "auto-trailing-slash",
+    "not_found_handling": "none"
+  }
+}

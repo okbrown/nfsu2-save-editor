@@ -1,0 +1,11 @@
+# Files in the repository that are not part of the website (Cloudflare Workers static assets).
+.git
+.gitignore
+.assetsignore
+wrangler.jsonc
+node_modules
+.wrangler
+.claude
+tests
+tools
+README.md
