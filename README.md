@@ -2,6 +2,11 @@
 
 Browser-based utility for editing **Need for Speed: Underground 2** career save files & extended `GARAGE.DAT` files. All file parsing and modifications happen locally in your browser - saves are never uploaded to any server.
 
+## About This Fork
+This is a fork of [Starladdey/nfsu2-save-editor](https://github.com/Starladdey/nfsu2-save-editor), the editor behind [nfsu2.divon.eu](https://nfsu2.divon.eu/). It adds the v3.0 changes listed under [What's New in v3.0](#whats-new-in-v30): one-button *Unlock Everything*, visual customisation, Quick Race custom cars, a built-in parts list and a number of save-safety fixes.
+
+The original repository ships its app only as a minified bundle, so the new features live in separate, readable modules (`js/visual-editor.js`, `js/career.js`, `js/custom-cars.js` and their data files) with small, documented patches to `js/app.bundle.min.js`. I plan to contact the original author to offer these changes for merging upstream and to ask about the unminified source, so they can be folded into it properly. Until then, the live site above runs the original version.
+
 ## Web Version
 - **Live Editor:** [nfsu2.divon.eu](https://nfsu2.divon.eu/)
 - **Guides & Documentation:** [nfsu2.divon.eu/guides/](https://nfsu2.divon.eu/guides/)
