@@ -54,8 +54,16 @@
   font-family: var(--font-mono);
 }
 
-.ve-tabs {
+.ve-tabbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
   padding: 10px 16px 0;
+}
+
+.ve-tabs {
   flex-wrap: wrap;
 }
 

@@ -847,7 +847,11 @@
     }).join('');
     const dirty = draftDirty();
     dialog.innerHTML = head + `
-      <div class="garage-mode-tabs ve-tabs" role="tablist">${tabs}</div>
+      <div class="ve-tabbar">
+        <div class="garage-mode-tabs ve-tabs" role="tablist">${tabs}</div>
+        <button type="button" class="btn btn-xs btn-ghost" data-ve="reset-tab"
+          title="Every part on this tab back to what the game gives a new car">Reset ${escapeHtml(TABS.find(([id]) => id === state.tab)[1])} to stock</button>
+      </div>
       <div class="ve-body">${sections || '<p class="ve-empty">No editable parts for this car in this category.</p>'}</div>
       <div class="ve-foot">
         <button type="button" class="btn btn-ghost btn-sm" data-ve="reset-all" title="Every part, paint, vinyl, decal and specialty back to what the game gives a new car">Reset whole car to stock</button>
@@ -995,6 +999,10 @@
       case 'load-bun':
         if (await pickGameData()) renderDialog();
         return;
+      case 'reset-tab': {
+        const [, name] = TABS.find(([id]) => id === state.tab);
+        return resetDraft(VISUAL_SLOTS.filter((x) => x.tab === state.tab).map((x) => x.id), name);
+      }
       case 'reset-all':
         return resetDraft(undefined, 'Whole car');
       case 'discard':
