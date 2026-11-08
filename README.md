@@ -28,7 +28,7 @@ Browser-based utility for editing **Need for Speed: Underground 2** career save 
   - Keeps your profile name, money and cars. Works without any game files.
 - **Visual Customisation (per car, optional):**
   - Change body kits, spoilers, hoods, rims, spinners, paint (body, rims, calipers, spoiler…), vinyls, decals, window tint, neons, hydraulics and custom gauges for any garage or custom car, with *Reset to stock* per section or for the whole car, and the game's own *None* where it has one.
-  - Part lists come from your own game's `GLOBAL\GlobalB.lzc` (PC install/disc) or an unpacked `GLOBALB.BUN`, read locally and never uploaded, so only parts that fit the selected car are offered.
+  - Works without any game files: a built-in parts list (`js/parts-data.js`: part IDs, names and which cars they fit, no models or textures) offers only parts that fit the selected car; rims are listed by brand as model and size, vinyls by category. For a modded game you can load your own `GLOBAL\GlobalB.lzc` instead (read locally, never uploaded).
 - **Quick Race Custom Cars:**
   - Add, change and delete the cars of *Quick Race → Customize* (up to 20, stored separately from the career garage): copy one of your garage cars or pick any built-in car, set the performance level, Outrun Uniques and Dyno curves, and edit visuals, like a garage car. New cars get the game's own `TUNED_CAR_<n>` IDs.
 - **JSON Car Patches & Checksums:**
@@ -57,6 +57,7 @@ Press `Win + R` and paste:
    - Download the latest `.zip` from [Releases](https://github.com/Starladdey/nfsu2-save-editor/releases) or clone this repository.
    - Open `index.html` in your browser to load and edit local save files.
    - *Tests:* `node --test tests/*.test.mjs` (no dependencies). Career tests also need the game data: `NFSU2_GAMEDATA=/path/to/GLOBAL/GlobalB.lzc node --test tests/*.test.mjs`.
+   - *Built-in game tables:* `js/parts-data.js` is generated with `node tools/build-parts-data.mjs /path/to/GLOBAL/GlobalB.lzc`.
    - *Note:* To use the `Try Demo`, button locally, run a local HTTP server in the project folder (for example, `npx serve` or `python -m http.server 8000`), as browsers block `fetch()` requests over `file://`.
 
 ## Credits & Disclaimer

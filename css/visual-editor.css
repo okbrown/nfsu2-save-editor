@@ -292,3 +292,17 @@
   border-color: var(--accent-amber);
   background: var(--accent-amber-dim);
 }
+
+.ve-linkbtn {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text-muted);
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.ve-linkbtn:hover {
+  color: var(--text-secondary);
+}

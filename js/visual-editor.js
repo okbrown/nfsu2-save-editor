@@ -688,6 +688,46 @@
 
   const PICKER_MIN = 25; // longer lists open as a searchable picker instead of a <select>
 
+  /** A catalogue from the built-in parts table (js/parts-data.js). */
+  function builtinCatalog(data) {
+    const attrKeys = data.attributes;
+    const parts = data.parts.map(([hash, name, type, level, variant, group, color, attrs]) => ({
+      hash, name, type, level, variant, group: data.groups[group], color,
+      attributes: new Map(Object.entries(attrs || {}).map(([i, values]) => [attrKeys[i], values])),
+    }));
+    const overrides = new Map(data.overrides.map(([car, slot, a, b]) => [`${car}:${slot}`, [a, b]]));
+    const cars = data.cars.map(([hash, name, stockPaint]) => ({ hash, name, stockPaint }));
+    return new VisualCatalog(parts, data.defaults, overrides, cars);
+  }
+
+  // js/parts-data.js is loaded on first use, with the same version tag as this script.
+  const SCRIPT_VERSION = (() => {
+    try { return new URL(document.currentScript.src).search; } catch { return ''; }
+  })();
+  let builtinLoading = null;
+
+  function useBuiltinParts() {
+    if (catalog) return Promise.resolve(true);
+    if (!builtinLoading) {
+      builtinLoading = new Promise((resolve) => {
+        if (root.NFSU2PartsData) return resolve(true);
+        const script = document.createElement('script');
+        script.src = 'js/parts-data.js' + SCRIPT_VERSION;
+        script.onload = () => resolve(!!root.NFSU2PartsData);
+        script.onerror = () => resolve(false);
+        document.head.appendChild(script);
+      }).then((ok) => {
+        if (ok && !catalog) {
+          catalog = builtinCatalog(root.NFSU2PartsData);
+          catalogFile = '';
+        }
+        builtinLoading = null;
+        return !!catalog;
+      });
+    }
+    return builtinLoading;
+  }
+
   /** Parses GLOBALB.BUN bytes and makes them the active part catalogue. */
   function loadGameData(input, name, { quiet = false, remember = false } = {}) {
     let bytes = input instanceof Uint8Array ? input : new Uint8Array(input);
@@ -798,6 +838,7 @@
     const length = garage ? GARAGE_RECORD_LEN : CUSTOM_RECORD_LEN;
     state = { title, getBytes, base, length, garage, draft: bytes.slice(), tab: 'BODY', open: null };
     ensureDialog();
+    if (!catalog) useBuiltinParts().then(() => state && renderDialog());
     renderDialog();
     if (!dialog.open) dialog.showModal();
   }
@@ -816,16 +857,17 @@
       <div class="ve-head">
         <div>
           <h2 id="ve-title">Customise — ${escapeHtml(state.title)}</h2>
-          <span class="ve-sub">${escapeHtml(carLabel(car))}${catalog ? ` · parts from ${escapeHtml(catalogFile)}` : ''}</span>
+          <span class="ve-sub">${escapeHtml(carLabel(car))} · ${catalogFile ? `parts from ${escapeHtml(catalogFile)}` : 'built-in parts list'}
+            <button type="button" class="ve-linkbtn" data-ve="load-bun" title="For a modded game: read the parts from your own GLOBAL\\GlobalB.lzc">use my own game data…</button></span>
         </div>
         <button type="button" class="btn btn-xs btn-ghost" data-ve="close" aria-label="Close">✕</button>
       </div>`;
     if (!catalog) {
       dialog.innerHTML = head + `
         <div class="ve-body ve-empty">
-          <p>Part lists (rims, spoilers, body kits, paints…) come from your own copy of the game, so the editor only offers parts that fit this car.</p>
-          <p>Load <code>GLOBAL\\GlobalB.lzc</code> (or an unpacked <code>GLOBALB.BUN</code>) from your NFSU2 install folder. It is read locally and never uploaded.</p>
-          <button type="button" class="btn btn-primary btn-sm" data-ve="load-bun">Load game data…</button>
+          <p>${builtinLoading ? 'Loading the parts list…' : 'The built-in parts list could not be loaded.'}</p>
+          ${builtinLoading ? '' : `<p>You can load <code>GLOBAL\\GlobalB.lzc</code> from your NFSU2 install folder instead. It is read locally and never uploaded.</p>
+          <button type="button" class="btn btn-primary btn-sm" data-ve="load-bun">Load game data…</button>`}
         </div>`;
       return;
     }
@@ -1057,7 +1099,7 @@
 
   root.NFSU2Visual = {
     gameHash, ownAllParts, ownsAllParts, PURCHASED_REL, isNoneSlot, DEFAULT_VINYL_COLOURS, parseGameData, decompressJdlz,
-    loadGameData, pickGameData, openEditor, menuChoices: choices, carLabel, hasGameData: () => !!catalog, gameDataName: () => catalogFile,
+    loadGameData, pickGameData, openEditor, menuChoices: choices, builtinCatalog, useBuiltinParts, carLabel, hasGameData: () => !!catalogFile, gameDataName: () => catalogFile,
     readVisual, readCarHash, listCustomCars, customCarBase, colorPalettes,
     VisualCatalog, VISUAL_SLOTS, VISUAL_COUNT, VISUAL_REL, PERF_REL,
   };

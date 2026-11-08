@@ -172,5 +172,6 @@ test('the page loads one version of every editor script and stylesheet (no stale
     assert.ok(a.endsWith(`?v=${version}`), `${a} must carry ?v=${version}`);
     assert.ok(sw.includes(`'/${a.split('?')[0]}?v=' + ASSET_VERSION`), `${a} must be precached with the same version`);
   }
+  assert.ok(sw.includes("'/js/parts-data.js?v=' + ASSET_VERSION"), 'the built-in parts list, loaded on demand, is precached too');
   assert.doesNotMatch(sw, /caches\.match\(req\)\.then\(\(cached\) => \{[^}]*return cached \|\| network/, 'scripts are not served cache-first');
 });

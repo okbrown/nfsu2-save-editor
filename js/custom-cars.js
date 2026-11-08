@@ -211,11 +211,9 @@
         </div>
         <div class="garage-global-actions">
           <select class="cc-add" aria-label="Add a custom car"></select>
-          <button type="button" class="btn btn-secondary btn-sm" data-cc-load>Load game data</button>
         </div>
       </div>
       <div class="garage-slots-list cc-list"></div>`;
-    card.querySelector('[data-cc-load]').addEventListener('click', () => root.NFSU2Visual?.pickGameData());
     card.addEventListener('change', onChange);
     card.addEventListener('click', onClick);
     garageCard.after(card);
@@ -226,7 +224,6 @@
     const s = save(), c = ensureCard();
     if (!c) return;
     const visual = root.NFSU2Visual;
-    c.querySelector('[data-cc-load]').textContent = visual?.hasGameData() ? `✓ ${visual.gameDataName()}` : 'Load game data';
     const list = c.querySelector('.cc-list'), add = c.querySelector('.cc-add');
     if (!s || s.isGarageDatFile) {
       c.hidden = !s;

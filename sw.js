@@ -1,7 +1,7 @@
 // NFSU2 Save Editor — service worker
 // ASSET_VERSION must match the ?v= on index.html's scripts and stylesheets, so a page never runs
 // one version's scripts with another's: the editor's modules depend on each other.
-const ASSET_VERSION = '11';
+const ASSET_VERSION = '12';
 const CACHE_NAME = 'nfsu2-save-editor-v' + ASSET_VERSION;
 
 const PRECACHE = [
@@ -16,6 +16,7 @@ const PRECACHE = [
   '/js/career-data.js?v=' + ASSET_VERSION,
   '/js/career.js?v=' + ASSET_VERSION,
   '/js/custom-cars.js?v=' + ASSET_VERSION,
+  '/js/parts-data.js?v=' + ASSET_VERSION,
   '/assets/DEMO',
   '/assets/JANE',
   '/assets/favicon.svg',
